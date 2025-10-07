@@ -3,112 +3,146 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Rota Turística VR — 3 Pontos</title>
+  <title>VR Mini‑Game — Gaze Shooter</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    :root { color-scheme: dark; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#000; }
-    .hud { position:fixed; top:10px; left:10px; right:10px; display:flex; gap:.5rem; align-items:center; z-index:10 }
-    .btn { cursor:pointer; border:0; border-radius:.6rem; padding:.55rem .8rem; background:#2563eb; color:#fff; font-weight:700; box-shadow:0 4px 18px rgba(0,0,0,.18) }
-    .btn.secondary { background:#374151; }
-    .card { background: rgba(0,0,0,.55); color:#fff; padding:.5rem .7rem; border-radius:.6rem; }
-    .hud.hide { display:none; }
-    .toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:#111827; color:#fff; padding:.55rem .8rem; border-radius:.6rem; opacity:.95; z-index:10; display:none }
+    :root{color-scheme:dark}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#000}
+    .hud{position:fixed;inset:10px auto auto 10px;display:flex;gap:.5rem;align-items:center;z-index:10}
+    .hud-right{position:fixed;top:10px;right:10px;display:flex;gap:.5rem;z-index:10}
+    .btn{cursor:pointer;border:0;border-radius:.6rem;padding:.55rem .8rem;background:#2563eb;color:#fff;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+    .btn.secondary{background:#374151}
+    .chip{background:rgba(0,0,0,.55);color:#fff;padding:.45rem .7rem;border-radius:.6rem;font-weight:700}
+    .toast{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:#111827;color:#fff;padding:.55rem .8rem;border-radius:.6rem;opacity:.96;display:none;z-index:10}
+    .hide{display:none}
   </style>
 </head>
 <body>
   <!-- HUD -->
-  <div class="hud" id="hud">
-    <div class="card" id="poiTitle">Ponto: Orla do Rio</div>
+  <div class="hud" id="hudLeft">
+    <span class="chip">🎯 Pontos: <span id="score">0</span></span>
+    <span class="chip">⏱️ Tempo: <span id="time">30</span>s</span>
+    <button class="btn" id="startBtn">Iniciar</button>
+    <button class="btn secondary" id="restartBtn" disabled>Reiniciar</button>
+  </div>
+  <div class="hud-right" id="hudRight">
     <button class="btn" id="enterVR">Modo VR</button>
-    <button class="btn secondary" id="sensorBtn">Ativar sensores</button>
+    <button class="btn secondary" id="sensorBtn">Sensores</button>
   </div>
   <div class="toast" id="toast"></div>
 
   <!-- Cena -->
-  <a-scene vr-mode-ui="enabled:true" renderer="colorManagement:true; antialias:true" device-orientation-permission-ui="enabled:false">
-    <a-assets timeout="20000">
-      <!-- Coloque suas imagens 360 nesta pasta e ajuste os nomes -->
-      <img id="img-rio"    src="assets/360/rio-araguatins.png" crossorigin="anonymous">
-      <img id="img-praca"  src="assets/360/praca-360.jpg"    crossorigin="anonymous">
-      <img id="img-campus" src="assets/360/campus-360.jpg"   crossorigin="anonymous">
-      <!-- seta simples para hotspot -->
-      <img id="arrow" src="https://cdn.jsdelivr.net/gh/feathericons/feather/icons/arrow-right-circle.svg">
-    </a-assets>
+  <a-scene vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false">
+    <a-assets timeout="15000"></a-assets>
 
-    <!-- esfera 360 atual -->
-    <a-sky id="sky" src="#img-rio" rotation="0 180 0"></a-sky>
+    <!-- Céu e chão -->
+    <a-sky color="#0b1020"></a-sky>
+    <a-plane color="#1b5e20" rotation="-90 0 0" width="60" height="60" position="0 0 -4"></a-plane>
 
-    <!-- hotspots (olhar por 1s) -->
-    <a-image id="hs-next" src="#arrow" class="clickable" position="0 1.2 -3" scale="1.2 1.2 1.2" look-at="#camera"></a-image>
-    <a-image id="hs-prev" src="#arrow" class="clickable" position="0 1.2 3" rotation="0 180 0" scale="1.2 1.2 1.2" look-at="#camera"></a-image>
+    <!-- Grupo onde os alvos serão criados -->
+    <a-entity id="targets"></a-entity>
 
-    <!-- mini-mapa simples: thumbnails (opcional; clique por mouse fora do VR) -->
-    <a-plane id="thumbbar" position="0 -1.2 -2.5" rotation="-20 0 0" width="2.4" height="0.6" color="#111" opacity="0.55"></a-plane>
-    <a-image id="t-rio"    src="#img-rio"    position="-0.8 -1.2 -2.45" scale="0.5 0.3 1" class="clickable"></a-image>
-    <a-image id="t-praca"  src="#img-praca"  position="0    -1.2 -2.45" scale="0.5 0.3 1" class="clickable"></a-image>
-    <a-image id="t-campus" src="#img-campus" position="0.8  -1.2 -2.45" scale="0.5 0.3 1" class="clickable"></a-image>
-
-    <!-- camera + cursores -->
-    <a-entity id="camera" camera look-controls wasd-controls="enabled:false" position="0 1.6 0">
-      <a-entity id="cursorMouse" cursor="fuse:false; rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
-      <a-entity id="cursorGaze" position="0 0 -1" geometry="primitive: ring; radiusInner: 0.007; radiusOuter: 0.012" material="color: #00e0b8; shader: flat" cursor="fuse:true; fuseTimeout:1100" raycaster="objects: .clickable" visible="false"></a-entity>
+    <!-- Câmera + cursores -->
+    <a-entity id="cameraRig">
+      <a-entity id="camera" camera look-controls wasd-controls="enabled:false" position="0 1.6 0">
+        <!-- Cursor mouse/touch fora do VR -->
+        <a-entity id="cursorMouse" cursor="fuse:false; rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+        <!-- Cursor gaze dentro do VR -->
+        <a-entity id="cursorGaze" position="0 0 -1" geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.015" material="color: #00e0b8; shader: flat" cursor="fuse:true; fuseTimeout:700" raycaster="objects: .clickable" visible="false"></a-entity>
+      </a-entity>
     </a-entity>
   </a-scene>
 
   <script>
     const scene = document.querySelector('a-scene');
-    const sky = document.getElementById('sky');
-    const title = document.getElementById('poiTitle');
-    const hud = document.getElementById('hud');
+    const targetsRoot = document.getElementById('targets');
+    const scoreEl = document.getElementById('score');
+    const timeEl = document.getElementById('time');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const hudLeft = document.getElementById('hudLeft');
+    const hudRight = document.getElementById('hudRight');
     const toast = document.getElementById('toast');
     const cursorGaze = document.getElementById('cursorGaze');
 
-    const pois = [
-      { id:'rio',    label:'Ponto: Orla do Rio', src:'#img-rio' },
-      { id:'praca',  label:'Ponto: Praça Central', src:'#img-praca' },
-      { id:'campus', label:'Ponto: IFTO Campus', src:'#img-campus' }
-    ];
-    let idx = 0;
+    let score = 0; let timeLeft = 30; let running = false; let spawnT; let timerT;
 
-    function setPOI(i){
-      idx = (i + pois.length) % pois.length;
-      const p = pois[idx];
-      sky.setAttribute('src', p.src);
-      title.textContent = p.label;
-      flash(`Indo para ${p.label}`);
+    function showToast(msg, ms=1500){
+      toast.textContent = msg; toast.style.display='block';
+      clearTimeout(showToast._t); showToast._t = setTimeout(()=>toast.style.display='none', ms);
     }
 
-    function next(){ setPOI(idx+1); }
-    function prev(){ setPOI(idx-1); }
+    function rand(min,max){ return Math.random()*(max-min)+min; }
 
-    function flash(msg, ms=1500){ toast.textContent = msg; toast.style.display='block'; clearTimeout(flash._t); flash._t=setTimeout(()=>toast.style.display='none', ms); }
+    function spawnTarget(){
+      // posição pseudo-aleatória na frente do usuário (sem ficar longe demais)
+      const dist = rand(2.2, 4.2); // metros
+      const yaw = rand(-45, 45) * Math.PI/180; // graus para radianos
+      const x = Math.sin(yaw) * dist;
+      const z = -Math.cos(yaw) * dist;
+      const y = rand(0.8, 2.2);
 
-    // Hotspots next/prev
-    document.getElementById('hs-next').addEventListener('click', next);
-    document.getElementById('hs-prev').addEventListener('click', prev);
+      const t = document.createElement('a-sphere');
+      t.setAttribute('class','target clickable');
+      t.setAttribute('position', `${x} ${y} ${z}`);
+      t.setAttribute('radius', rand(0.12, 0.22));
+      t.setAttribute('color', `hsl(${Math.floor(rand(0,360))}, 80%, 55%)`);
+      t.setAttribute('animation__pop', 'property: scale; from: 0 0 0; to: 1 1 1; dur: 180; easing: easeOutBack');
+      // desaparece sozinho se não for acertado
+      t.setAttribute('animation__life','property: components.material.material.opacity; from:1; to:0; dur: 3500; delay: 2200');
+      t.addEventListener('animationcomplete__life', ()=> t.remove());
 
-    // Thumbs (atalhos)
-    document.getElementById('t-rio').addEventListener('click', ()=>setPOI(0));
-    document.getElementById('t-praca').addEventListener('click', ()=>setPOI(1));
-    document.getElementById('t-campus').addEventListener('click', ()=>setPOI(2));
+      const hit = ()=>{
+        if(!running) return;
+        score++; scoreEl.textContent = score;
+        t.setAttribute('animation__hit','property: scale; to: 0 0 0; dur: 120; easing: easeInQuad');
+        setTimeout(()=> t.remove(), 120);
+      };
+      t.addEventListener('click', hit);
+      targetsRoot.appendChild(t);
+    }
 
-    // VR enter/exit ajustes
-    scene.addEventListener('enter-vr', ()=>{ hud.classList.add('hide'); cursorGaze.setAttribute('visible', true); screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(()=>{}); });
-    scene.addEventListener('exit-vr',  ()=>{ hud.classList.remove('hide'); cursorGaze.setAttribute('visible', false); });
+    function gameStart(){
+      if(running) return;
+      running = true; score = 0; timeLeft = 30;
+      scoreEl.textContent = score; timeEl.textContent = timeLeft;
+      // limpa quaisquer restos
+      Array.from(targetsRoot.children).forEach(n=>n.remove());
+      startBtn.disabled = true; restartBtn.disabled = false;
+      showToast('Valendo! Acerte os alvos!');
+      spawnT = setInterval(spawnTarget, 750); // frequencia de alvos
+      timerT = setInterval(()=>{
+        timeLeft--; timeEl.textContent = timeLeft;
+        if(timeLeft<=0) gameOver();
+      }, 1000);
+    }
 
-    // Botões HUD
+    function gameOver(){
+      running = false; startBtn.disabled = false; restartBtn.disabled = false;
+      clearInterval(spawnT); clearInterval(timerT);
+      showToast(`Fim de jogo! Pontuação: ${score}` , 2500);
+    }
+
+    function gameRestart(){ gameOver(); gameStart(); }
+
+    startBtn.addEventListener('click', gameStart);
+    restartBtn.addEventListener('click', gameRestart);
+
+    // VR: alterna HUD/cursor
+    scene.addEventListener('enter-vr', ()=>{ hudLeft.classList.add('hide'); hudRight.classList.add('hide'); cursorGaze.setAttribute('visible', true); screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(()=>{}); });
+    scene.addEventListener('exit-vr', ()=>{ hudLeft.classList.remove('hide'); hudRight.classList.remove('hide'); cursorGaze.setAttribute('visible', false); });
+
+    // Botões úteis
     document.getElementById('enterVR').addEventListener('click', ()=> scene.enterVR && scene.enterVR());
     document.getElementById('sensorBtn').addEventListener('click', async ()=>{
-      try{
-        const needIOS = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
-        if(needIOS){ const res = await DeviceMotionEvent.requestPermission(); flash(res==='granted'?'Sensores ativados':'Permissão negada'); }
-        else flash('Sensores prontos');
-      }catch{ flash('Não foi possível ativar sensores'); }
+      try{ const needIOS = typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function';
+        if(needIOS){ const res = await DeviceMotionEvent.requestPermission(); showToast(res==='granted'?'Sensores ativados':'Permissão negada'); }
+        else showToast('Sensores prontos');
+      }catch{ showToast('Não foi possível ativar sensores'); }
     });
 
-    // inicia na orla
-    setPOI(0);
+    // Início: mostra dica
+    showToast('Toque em Iniciar e depois em Modo VR (opcional)');
   </script>
 </body>
 </html>
