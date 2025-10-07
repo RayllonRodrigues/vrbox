@@ -3,153 +3,112 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <meta name="theme-color" content="#111827" />
-  <title>VR Box — Teste Simples</title>
+  <title>Rota Turística VR — 3 Pontos</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     :root { color-scheme: dark; }
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#000; }
     .hud { position:fixed; top:10px; left:10px; right:10px; display:flex; gap:.5rem; align-items:center; z-index:10 }
-    .btn { cursor:pointer; border:0; border-radius:.6rem; padding:.6rem .8rem; background:#2563eb; color:#fff; font-weight:700; box-shadow:0 4px 18px rgba(0,0,0,.18) }
+    .btn { cursor:pointer; border:0; border-radius:.6rem; padding:.55rem .8rem; background:#2563eb; color:#fff; font-weight:700; box-shadow:0 4px 18px rgba(0,0,0,.18) }
     .btn.secondary { background:#374151; }
-    .card { background: rgba(0,0,0,.55); color:#fff; padding:.55rem .75rem; border-radius:.6rem; }
-    .toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:#111827; color:#fff; padding:.55rem .8rem; border-radius:.6rem; opacity:.92; z-index:10; display:none }
+    .card { background: rgba(0,0,0,.55); color:#fff; padding:.5rem .7rem; border-radius:.6rem; }
     .hud.hide { display:none; }
+    .toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:#111827; color:#fff; padding:.55rem .8rem; border-radius:.6rem; opacity:.95; z-index:10; display:none }
   </style>
 </head>
 <body>
   <!-- HUD -->
   <div class="hud" id="hud">
-    <div class="card" id="status">Olhe para o cubo para mudar o céu</div>
+    <div class="card" id="poiTitle">Ponto: Orla do Rio</div>
     <button class="btn" id="enterVR">Modo VR</button>
     <button class="btn secondary" id="sensorBtn">Ativar sensores</button>
   </div>
   <div class="toast" id="toast"></div>
 
-  <!-- CENA -->
-  <a-scene
-    renderer="antialias:true; colorManagement:true; physicallyCorrectLights:true"
-    vr-mode-ui="enabled:true"
-    device-orientation-permission-ui="enabled:false"
-  >
-    <!-- ASSETS (troque sky.jpg por foto 360 quando quiser) -->
-    <a-assets timeout="15000">
-      <!-- Exemplo: substitua por uma foto 360 em /assets/360/sky.jpg -->
-      <!-- <img id="sky360" src="assets/360/sky.jpg"> -->
+  <!-- Cena -->
+  <a-scene vr-mode-ui="enabled:true" renderer="colorManagement:true; antialias:true" device-orientation-permission-ui="enabled:false">
+    <a-assets timeout="20000">
+      <!-- Coloque suas imagens 360 nesta pasta e ajuste os nomes -->
+      <img id="img-rio"    src="assets/360/rio-araguatins.png" crossorigin="anonymous">
+      <img id="img-praca"  src="assets/360/praca-360.jpg"    crossorigin="anonymous">
+      <img id="img-campus" src="assets/360/campus-360.jpg"   crossorigin="anonymous">
+      <!-- seta simples para hotspot -->
+      <img id="arrow" src="https://cdn.jsdelivr.net/gh/feathericons/feather/icons/arrow-right-circle.svg">
     </a-assets>
 
-    <!-- Céu: use cor agora; depois, basta trocar por imagem 360:
-         <a-sky src="#sky360"></a-sky> -->
-    <a-sky id="sky" color="#223" rotation="0 -90 0"></a-sky>
+    <!-- esfera 360 atual -->
+    <a-sky id="sky" src="#img-rio" rotation="0 180 0"></a-sky>
 
-    <!-- Referência de chão -->
-    <a-plane color="#2e7d32" rotation="-90 0 0" width="40" height="40" position="0 0 -3"></a-plane>
+    <!-- hotspots (olhar por 1s) -->
+    <a-image id="hs-next" src="#arrow" class="clickable" position="0 1.2 -3" scale="1.2 1.2 1.2" look-at="#camera"></a-image>
+    <a-image id="hs-prev" src="#arrow" class="clickable" position="0 1.2 3" rotation="0 180 0" scale="1.2 1.2 1.2" look-at="#camera"></a-image>
 
-    <!-- CUBO clicável por olhar (gaze + fuse) OU toque no modo normal -->
-    <a-box id="hotspot" position="0 1.25 -3" depth="0.6" height="0.6" width="0.6"
-           color="#ffcc00" class="clickable"></a-box>
+    <!-- mini-mapa simples: thumbnails (opcional; clique por mouse fora do VR) -->
+    <a-plane id="thumbbar" position="0 -1.2 -2.5" rotation="-20 0 0" width="2.4" height="0.6" color="#111" opacity="0.55"></a-plane>
+    <a-image id="t-rio"    src="#img-rio"    position="-0.8 -1.2 -2.45" scale="0.5 0.3 1" class="clickable"></a-image>
+    <a-image id="t-praca"  src="#img-praca"  position="0    -1.2 -2.45" scale="0.5 0.3 1" class="clickable"></a-image>
+    <a-image id="t-campus" src="#img-campus" position="0.8  -1.2 -2.45" scale="0.5 0.3 1" class="clickable"></a-image>
 
-    <a-entity text="value: Olá, VR Box!; color: #fff; align: center; width: 4"
-              position="0 2 -3"></a-entity>
-
-    <!-- Câmera + cursores: mouse fora do VR e gaze com fuse dentro do VR -->
-    <a-entity id="rig">
-      <a-entity id="camera" camera look-controls wasd-controls="enabled:false" position="0 1.6 0">
-        <!-- cursor para desktop/touch -->
-        <a-entity id="cursorMouse"
-                  cursor="fuse:false; rayOrigin: mouse"
-                  raycaster="objects: .clickable"></a-entity>
-        <!-- cursor para VR (gaze): aparece só dentro do VR -->
-        <a-entity id="cursorGaze"
-                  position="0 0 -1"
-                  geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.015"
-                  material="color: white; shader: flat"
-                  cursor="fuse:true; fuseTimeout:1200"
-                  raycaster="objects: .clickable"
-                  visible="false"></a-entity>
-      </a-entity>
+    <!-- camera + cursores -->
+    <a-entity id="camera" camera look-controls wasd-controls="enabled:false" position="0 1.6 0">
+      <a-entity id="cursorMouse" cursor="fuse:false; rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+      <a-entity id="cursorGaze" position="0 0 -1" geometry="primitive: ring; radiusInner: 0.007; radiusOuter: 0.012" material="color: #00e0b8; shader: flat" cursor="fuse:true; fuseTimeout:1100" raycaster="objects: .clickable" visible="false"></a-entity>
     </a-entity>
   </a-scene>
 
   <script>
-    // ---------- Helpers UI ----------
+    const scene = document.querySelector('a-scene');
+    const sky = document.getElementById('sky');
+    const title = document.getElementById('poiTitle');
     const hud = document.getElementById('hud');
     const toast = document.getElementById('toast');
-    const statusText = document.getElementById('status');
-    function showToast(msg, ms=2000){
-      toast.textContent = msg;
-      toast.style.display = 'block';
-      clearTimeout(showToast._t);
-      showToast._t = setTimeout(() => toast.style.display = 'none', ms);
-    }
-
-    // ---------- Cores do céu ----------
-    const colors = ["#223", "#0d47a1", "#4a148c", "#1b5e20", "#4e342e", "#37474f"];
-    let i = 0;
-    const sky = document.getElementById('sky');
-    const hotspot = document.getElementById('hotspot');
-
-    function toggleSky(){
-      i = (i + 1) % colors.length;
-      sky.setAttribute('color', colors[i]);
-      showToast('Céu alterado');
-    }
-
-    hotspot.addEventListener('click', toggleSky);
-    // Também dispara ao completar o "fuse" (gaze) no VR
-    hotspot.addEventListener('mouseenter', () => statusText.textContent = 'Mantenha o olhar no cubo…');
-    hotspot.addEventListener('mouseleave', () => statusText.textContent = 'Olhe para o cubo para mudar o céu');
-
-    // ---------- VR Mode / HUD ----------
-    const scene = document.querySelector('a-scene');
     const cursorGaze = document.getElementById('cursorGaze');
 
-    scene.addEventListener('enter-vr', () => {
-      hud.classList.add('hide');
-      cursorGaze.setAttribute('visible', true);
-      screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(()=>{});
-      keepAwake(true);
-    });
+    const pois = [
+      { id:'rio',    label:'Ponto: Orla do Rio', src:'#img-rio' },
+      { id:'praca',  label:'Ponto: Praça Central', src:'#img-praca' },
+      { id:'campus', label:'Ponto: IFTO Campus', src:'#img-campus' }
+    ];
+    let idx = 0;
 
-    scene.addEventListener('exit-vr', () => {
-      hud.classList.remove('hide');
-      cursorGaze.setAttribute('visible', false);
-      keepAwake(false);
-    });
-
-    // ---------- Botões ----------
-    document.getElementById('enterVR').addEventListener('click', () => {
-      if (scene && scene.enterVR) scene.enterVR();
-    });
-
-    // Pede permissão de sensores (iOS/alguns Android)
-    async function requestSensors(){
-      try {
-        const needIOS = typeof DeviceMotionEvent !== 'undefined' &&
-                        typeof DeviceMotionEvent.requestPermission === 'function';
-        if (needIOS) {
-          const res = await DeviceMotionEvent.requestPermission();
-          if (res === 'granted') showToast('Sensores ativados'); else showToast('Permissão negada');
-        } else {
-          // Android geralmente já permite sem prompt explícito
-          showToast('Sensores prontos');
-        }
-      } catch(e){ showToast('Não foi possível ativar sensores'); }
+    function setPOI(i){
+      idx = (i + pois.length) % pois.length;
+      const p = pois[idx];
+      sky.setAttribute('src', p.src);
+      title.textContent = p.label;
+      flash(`Indo para ${p.label}`);
     }
-    document.getElementById('sensorBtn').addEventListener('click', requestSensors);
 
-    // ---------- Wake Lock (mantém tela ligada no VR) ----------
-    let wakeLock;
-    async function keepAwake(enable){
+    function next(){ setPOI(idx+1); }
+    function prev(){ setPOI(idx-1); }
+
+    function flash(msg, ms=1500){ toast.textContent = msg; toast.style.display='block'; clearTimeout(flash._t); flash._t=setTimeout(()=>toast.style.display='none', ms); }
+
+    // Hotspots next/prev
+    document.getElementById('hs-next').addEventListener('click', next);
+    document.getElementById('hs-prev').addEventListener('click', prev);
+
+    // Thumbs (atalhos)
+    document.getElementById('t-rio').addEventListener('click', ()=>setPOI(0));
+    document.getElementById('t-praca').addEventListener('click', ()=>setPOI(1));
+    document.getElementById('t-campus').addEventListener('click', ()=>setPOI(2));
+
+    // VR enter/exit ajustes
+    scene.addEventListener('enter-vr', ()=>{ hud.classList.add('hide'); cursorGaze.setAttribute('visible', true); screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(()=>{}); });
+    scene.addEventListener('exit-vr',  ()=>{ hud.classList.remove('hide'); cursorGaze.setAttribute('visible', false); });
+
+    // Botões HUD
+    document.getElementById('enterVR').addEventListener('click', ()=> scene.enterVR && scene.enterVR());
+    document.getElementById('sensorBtn').addEventListener('click', async ()=>{
       try{
-        if (enable && 'wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-          wakeLock.addEventListener('release', () => {});
-        } else if (!enable && wakeLock) {
-          await wakeLock.release(); wakeLock = null;
-        }
-      } catch(e) {}
-    }
+        const needIOS = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
+        if(needIOS){ const res = await DeviceMotionEvent.requestPermission(); flash(res==='granted'?'Sensores ativados':'Permissão negada'); }
+        else flash('Sensores prontos');
+      }catch{ flash('Não foi possível ativar sensores'); }
+    });
+
+    // inicia na orla
+    setPOI(0);
   </script>
 </body>
 </html>
