@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>VR Box — Teste Simples</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .hud { position:fixed; top:10px; left:10px; right:10px; display:flex; gap:.5rem; align-items:center; z-index:10 }
+    .btn { cursor:pointer; border:0; border-radius:.6rem; padding:.5rem .7rem; background:#2563eb; color:#fff; font-weight:600; box-shadow:0 4px 18px rgba(0,0,0,.12) }
+    .card { background: rgba(0,0,0,.55); color:#fff; padding:.5rem .7rem; border-radius:.6rem; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="card">Toque no cubo para mudar o céu</div>
+    <button class="btn" id="enterVR">Modo VR</button>
+  </div>
+
+  <a-scene vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true">
+    <!-- CÉU simples (pinte ou troque por foto 360 depois) -->
+    <a-sky id="sky" color="#223" rotation="0 -90 0"></a-sky>
+
+    <!-- CHÃO pra dar referência -->
+    <a-plane color="#2e7d32" rotation="-90 0 0" width="40" height="40" position="0 0 -3"></a-plane>
+
+    <!-- CUBO clicável -->
+    <a-box id="hotspot" position="0 1.25 -3" depth="0.6" height="0.6" width="0.6" color="#ffcc00" class="clickable"></a-box>
+
+    <!-- Texto -->
+    <a-entity text="value: Olá, VR Box!; color: #fff; align: center; width: 4" position="0 2 -3"></a-entity>
+
+    <!-- Câmera com cursor (ajuda a clicar no VR) -->
+    <a-entity camera look-controls>
+      <a-entity cursor="fuse: false; rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    const colors = ["#223", "#0d47a1", "#4a148c", "#1b5e20", "#4e342e", "#37474f"]; let i = 0;
+    const sky = document.getElementById('sky');
+    const hotspot = document.getElementById('hotspot');
+
+    hotspot.addEventListener('click', () => {
+      i = (i + 1) % colors.length;
+      sky.setAttribute('color', colors[i]);
+    });
+
+    document.getElementById('enterVR').addEventListener('click', () => {
+      const scene = document.querySelector('a-scene');
+      if (scene && scene.enterVR) scene.enterVR();
+    });
+  </script>
+</body>
+</html>
