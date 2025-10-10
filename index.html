@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Mapa Vivo — Trilha na Floresta até o Rio</title>
+  <title>Mapa Vivo — Trilha na Floresta até o Rio (placas premium)</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     :root{color-scheme:dark}
@@ -38,7 +38,7 @@
     <a-sky id="sky" color="#0b1020"></a-sky>
     <a-entity light="type: ambient; intensity: 0.45"></a-entity>
     <a-entity light="type: directional; intensity: 0.9" position="-2 6 -3"></a-entity>
-    <a-plane color="#1b5e20" rotation="-90 0 0" width="300" height="300" position="0 0 0"></a-plane>
+    <a-plane color="#1b5e20" rotation="-90 0 0" width="320" height="320" position="0 0 0"></a-plane>
 
     <!-- Raiz do mundo (trilha, árvores, marcadores, rio) -->
     <a-entity id="worldRoot"></a-entity>
@@ -113,39 +113,37 @@
 
     const worldRoot = document.getElementById('worldRoot');
 
-    // desenha a "estradinha" com placas ao longo da curva
+    // trilha: "estradinha" segmentada
     function buildPath(){
-      const steps = 220; // qualidade do caminho
+      const steps = 240; // qualidade do caminho
       const pathWidth = 2.2; // largura do corredor
       for(let i=0;i<steps;i++){
         const t = i/(steps-1);
         const p = curve.getPointAt(t);
-        // pequenas placas/segmentos simulando um chão de terra
         const seg = document.createElement('a-plane');
         seg.setAttribute('position', `${p.x} 0.01 ${p.z}`);
         seg.setAttribute('rotation', '-90 0 0');
         seg.setAttribute('width', pathWidth);
         seg.setAttribute('height', 1.4);
-        seg.setAttribute('color', '#6b4f2a'); // marrom da trilha
+        seg.setAttribute('color', '#6b4f2a');
         seg.setAttribute('opacity', '0.92');
         worldRoot.appendChild(seg);
       }
     }
 
-    // árvores dos dois lados, evitando o corredor da trilha (largura segura)
+    // árvores nas laterais, evitando o corredor
     function buildForest(){
-      const safeR = 1.6; // raio de segurança do corredor
+      const safeR = 1.6; // raio seguro do corredor
       function tooCloseToPath(x,z){
-        // aproximação: verifica distância a alguns samples da curva
         for(let s=0; s<=1; s+=0.05){
           const c = curve.getPointAt(s);
           const dx=x-c.x, dz=z-c.z; if((dx*dx+dz*dz) < (safeR*safeR)) return true;
         }
         return false;
       }
-      for(let i=0;i<220;i++){
-        const x = (Math.random()*60-30); // -30..30
-        const z = (Math.random()*-40);   // 0..-40
+      for(let i=0;i<240;i++){
+        const x = (Math.random()*70-35);
+        const z = (Math.random()*-48);
         if(tooCloseToPath(x,z)) continue;
         const trunkH = 1.2 + Math.random()*1.2;
         const crownR = 0.5 + Math.random()*0.9;
@@ -177,7 +175,6 @@
       water.setAttribute('animation__wave','property: material.opacity; dir: alternate; from: 0.88; to: 0.96; dur: 1600; loop: true; easing: easeInOutSine');
       worldRoot.appendChild(water);
 
-      // margem com pedras simples
       for(let i=0;i<24;i++){
         const s = 0.2+Math.random()*0.5;
         const dx = (Math.random()*14-7), dz=(Math.random()*4-2);
@@ -189,26 +186,108 @@
       }
     }
 
-    // marcadores informativos (gaze/click) nas paradas educativas
+    // ======= COMPONENTES DE DESIGN =======
+    // 1) Sempre virada para a câmera (billboard)
+    AFRAME.registerComponent('face-camera', {
+      tick(){ const cam = document.getElementById('camera'); if(!cam) return; const cpos = new THREE.Vector3(); cam.object3D.getWorldPosition(cpos); this.el.object3D.lookAt(cpos);} 
+    });
+    // 2) Fade com a distância (menos poluição visual)
+    AFRAME.registerComponent('distance-fade', {
+      schema: { near:{default:1.5}, far:{default:10}, min:{default:0.2} },
+      tick(){
+        const cam = document.getElementById('camera'); if(!cam) return;
+        const cpos = new THREE.Vector3(); cam.object3D.getWorldPosition(cpos);
+        const pos = new THREE.Vector3(); this.el.object3D.getWorldPosition(pos);
+        const d = cpos.distanceTo(pos); let a = 1;
+        if(d < this.data.near) a = Math.max(this.data.min, d/this.data.near);
+        if(d > this.data.far)  a = Math.max(this.data.min, 1 - (d-this.data.far)/(this.data.far*0.8));
+        const mesh = this.el.getObject3D('mesh'); if(!mesh) return; const mats = mesh.material;
+        if(Array.isArray(mats)) mats.forEach(m=>{m.transparent=true; m.opacity=a;}); else { mats.transparent=true; mats.opacity=a; }
+      }
+    });
+
+    function createSignAt(x, z, title, text, highlight=false){
+      const sign = document.createElement('a-entity');
+      sign.setAttribute('position', `${x} 0 ${z}`);
+      sign.setAttribute('face-camera', '');
+      sign.setAttribute('distance-fade', 'near:1.5; far:10; min:0.2');
+      worldRoot.appendChild(sign);
+
+      const post = document.createElement('a-cylinder');
+      post.setAttribute('position', `0 0.75 0`);
+      post.setAttribute('radius', 0.05);
+      post.setAttribute('height', 1.5);
+      post.setAttribute('color', '#5a4528');
+      sign.appendChild(post);
+
+      const bar = document.createElement('a-box');
+      bar.setAttribute('position', `0 1.35 0`);
+      bar.setAttribute('depth', 0.06);
+      bar.setAttribute('height', 0.06);
+      bar.setAttribute('width', 1.7);
+      bar.setAttribute('color', '#4b3820');
+      sign.appendChild(bar);
+
+      const back = document.createElement('a-plane');
+      back.setAttribute('position', `0 1.1 0.03`);
+      back.setAttribute('width', 1.7);
+      back.setAttribute('height', 0.9);
+      back.setAttribute('color', '#2b2b2b');
+      back.setAttribute('material', 'opacity:0.85; roughness:1; metalness:0');
+      back.setAttribute('animation__hover_in','property: scale; to: 1.03 1.03 1; dur: 180; startEvents: mouseenter');
+      back.setAttribute('animation__hover_out','property: scale; to: 1 1 1; dur: 180; startEvents: mouseleave');
+      sign.appendChild(back);
+
+      const plate = document.createElement('a-plane');
+      plate.setAttribute('position', `0 1.1 0.04`);
+      plate.setAttribute('width', 1.6);
+      plate.setAttribute('height', 0.8);
+      plate.setAttribute('color', highlight ? '#155e75' : '#704e2e');
+      plate.setAttribute('material', 'opacity:0.95; roughness:1; metalness:0');
+      plate.classList.add('clickable');
+      sign.appendChild(plate);
+
+      const icon = document.createElement('a-entity');
+      icon.setAttribute('geometry','primitive: box; depth: 0.02; height: 0.16; width: 0.16');
+      icon.setAttribute('position','-0.68 1.1 0.05');
+      icon.setAttribute('rotation','0 0 45');
+      icon.setAttribute('material', `color: ${highlight ? '#06b6d4' : '#e6b980'}; emissive: ${highlight ? '#0891b2' : '#7a4'}; emissiveIntensity: 0.3`);
+      sign.appendChild(icon);
+
+      const t = document.createElement('a-entity');
+      t.setAttribute('text', `value:${title}; align:left; color:#fff; width: 3.6;`);
+      t.setAttribute('position','-0.55 1.24 0.06');
+      sign.appendChild(t);
+
+      const desc = document.createElement('a-entity');
+      desc.setAttribute('text', `value:${text}; align:left; color:#dbeafe; width: 3.3;`);
+      desc.setAttribute('position','-0.55 0.98 0.06');
+      sign.appendChild(desc);
+
+      [plate, back, t, desc].forEach(el => {
+        el.addEventListener('click', ()=>{ pauseWalk(); showInfo(title, text); });
+      });
+
+      return sign;
+    }
+
     function placeMarkers(){
       STOPS.forEach((s, i)=>{
         const v = curve.getPointAt(s.t);
-        const marker = document.createElement('a-torus-knot');
-        marker.setAttribute('position', `${v.x} 1 ${v.z}`);
-        marker.setAttribute('scale', '0.32 0.32 0.32');
-        marker.setAttribute('color', i === STOPS.length-1 ? '#00e0ff' : '#00e0b8');
+        const last = (i === STOPS.length-1);
+        const marker = document.createElement('a-ring');
+        marker.setAttribute('position', `${v.x} 0.02 ${v.z}`);
+        marker.setAttribute('rotation', '-90 0 0');
+        marker.setAttribute('radius-inner', '0.12');
+        marker.setAttribute('radius-outer', '0.2');
+        marker.setAttribute('color', last ? '#22d3ee' : '#34d399');
+        marker.setAttribute('material', 'opacity:0.95');
         marker.setAttribute('class', 'clickable');
-        marker.setAttribute('animation__rot','property: rotation; to: 0 360 0; loop: true; dur: 3500; easing: linear');
+        marker.setAttribute('animation__pulse','property: scale; dir: alternate; from: 1 1 1; to: 1.2 1.2 1; dur: 900; loop: true; easing: easeInOutSine');
         marker.addEventListener('click', ()=>{ pauseWalk(); showInfo(s.title, s.text); });
         worldRoot.appendChild(marker);
 
-        // placa ao lado
-        const plate = document.createElement('a-plane');
-        plate.setAttribute('position', `${v.x+0.7} 1 ${v.z+0.6}`);
-        plate.setAttribute('width', 1.9); plate.setAttribute('height', 0.65);
-        plate.setAttribute('color', '#0e1a36'); plate.setAttribute('material','opacity:0.95');
-        plate.setAttribute('text', `value:${s.title}; color:#bfe4ff; align:center; width:4`);
-        worldRoot.appendChild(plate);
+        createSignAt(v.x + 0.9, v.z + 0.7, s.title, s.text, last);
       });
     }
 
@@ -221,7 +300,6 @@
       rig.object3D.position.copy(pos);
       const look = pos.clone().add(dir); camera.object3D.lookAt(look);
 
-      // abre info automaticamente quando perto de um stop
       for(const s of STOPS){ if(Math.abs(t - s.t) < 0.01){ showInfo(s.title, s.text); } }
     }
     function pauseWalk(){ walking = false; playPauseBtn.textContent = '▶️ Reproduzir'; document.getElementById('status').textContent = 'Caminhada: pausada'; }
@@ -258,7 +336,7 @@
     scene.addEventListener('exit-vr',  ()=>{ hud.classList.remove('hide'); cursorGaze.setAttribute('visible', false); });
 
     // ===== Gamepad (controle Bluetooth) =====
-    // A = avança trecho | X = volta trecho | Y = play/pause | (B ignorado para não acionar "Voltar" do Android)
+    // A = avança trecho | X = volta trecho | Y = play/pause | (B ignorado)
     AFRAME.registerComponent('gamepad-walk', {
       schema: { speed: {default: 1.6} },
       init(){ this.lastBtn = {}; this.tmp = new THREE.Vector3(); this.vel = new THREE.Vector3(); },
@@ -268,7 +346,6 @@
         if(lx||ly){ const dir = new THREE.Vector3(); camera.object3D.getWorldDirection(dir); dir.y=0; dir.normalize(); const right=new THREE.Vector3().crossVectors(dir,new THREE.Vector3(0,1,0)).multiplyScalar(-1); this.tmp.copy(dir).multiplyScalar(-ly).add(right.multiplyScalar(lx)).normalize(); this.vel.copy(this.tmp).multiplyScalar(this.data.speed*delta); this.el.object3D.position.add(this.vel); }
         const pressed=i=>!!(pad.buttons[i]&&pad.buttons[i].pressed); const edge=i=>{const p=pressed(i); const ch=p&&!this.lastBtn[i]; this.lastBtn[i]=p; return ch;};
         if(edge(0)){ pauseWalk(); t=Math.min(1, t+0.08); flash('Avanço rápido'); }
-        // if(edge(1)){ ... } // B ignorado
         if(edge(2)){ pauseWalk(); t=Math.max(0, t-0.08); flash('Retrocesso'); }
         if(edge(3)){ walking? pauseWalk(): playWalk(); }
       }
