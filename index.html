@@ -34,7 +34,7 @@
   <div class="panel" id="infoPanel"><h3 id="infoTitle">Título</h3><p id="infoText">Texto</p></div>
 
   <!-- Cena -->
-  <a-scene id="scene" vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false">
+  <a-scene id="scene"$1 auto-walk>
     <!-- Ambiente -->
     <a-sky id="sky" color="#0b1020"></a-sky>
     <a-entity light="type: ambient; intensity: 0.45"></a-entity>
@@ -320,15 +320,18 @@
       const pos = curve.getPointAt(tParam), dir = curve.getTangentAt(Math.max(0,tParam-0.001));
       rig.object3D.position.copy(pos);
       const look = pos.clone().add(dir); camera.object3D.lookAt(look);
-
       for(const s of STOPS){ if(Math.abs(tParam - s.t) < 0.01){ showInfo(s.title, s.text); } }
     }
+
     function pauseWalk(){ walking = false; playPauseBtn.textContent = '▶️ Reproduzir'; document.getElementById('status').textContent = 'Caminhada: pausada'; }
     function playWalk(){ walking = true;  playPauseBtn.textContent = '⏸️ Pausar';     document.getElementById('status').textContent = 'Caminhada: tocando…'; hideInfo(); }
 
-    // ===== Loop principal =====
-    let lastTS = performance.now();
-    function loop(now){ const dt = (now-lastTS)/1000; lastTS = now; updateWalk(dt); requestAnimationFrame(loop); }
+    // Componente que roda no tick do A‑Frame (funciona no VR e no navegador)
+    AFRAME.registerComponent('auto-walk', {
+      tick: function (time, timeDelta) {
+        updateWalk((timeDelta||0)/1000);
+      }
+    });
 
     // ===== HUD botões =====
     document.getElementById('enterVR').addEventListener('click', async ()=>{
@@ -348,7 +351,12 @@
     });
 
     // ===== VR enter/exit =====
-    scene.addEventListener('enter-vr', ()=>{ hud.classList.add('hide'); cursorGaze.setAttribute('visible', true); });
+    scene.addEventListener('enter-vr', ()=>{ 
+      hud.classList.add('hide'); 
+      cursorGaze.setAttribute('visible', true);
+      // se entrar em VR logo no início e estiver pausado, damos play
+      if(!walking && tParam < 1){ playWalk(); }
+    });
     scene.addEventListener('exit-vr',  ()=>{ hud.classList.remove('hide'); cursorGaze.setAttribute('visible', false); });
 
     // ===== Gamepad (controle Bluetooth) =====
@@ -380,9 +388,8 @@
     window.addEventListener("pointerdown", ()=>{ const sc = document.querySelector('a-scene'); sc && sc.focus && sc.focus(); }, {once:true});
 
     // ===== Inicialização segura =====
-    // Garante construção mesmo se a cena já tiver carregado antes deste script.
     function startApp(){
-      try{ buildWorld(); lastTS = performance.now(); requestAnimationFrame(loop); }
+      try{ buildWorld(); }
       catch(err){ console.error(err); flash('Falha ao iniciar cena'); }
     }
 
