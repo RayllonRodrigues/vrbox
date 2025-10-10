@@ -19,6 +19,7 @@
     .panel{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:rgba(0,0,0,.65);backdrop-filter:blur(6px);color:#e6f3ff;padding:.85rem 1rem;border-radius:.8rem;max-width:92vw;display:none;z-index:10}
     .panel h3{margin:.2rem 0 .3rem;font-size:1rem}
     .panel p{margin:0;color:#c9d9f3;font-size:.95rem}
+    .close{cursor:pointer;font-weight:800;margin-left:.8rem}
   </style>
 </head>
 <body>
@@ -33,11 +34,12 @@
   <div class="panel" id="infoPanel"><h3 id="infoTitle">Título</h3><p id="infoText">Texto</p></div>
 
   <!-- Cena -->
-  <a-scene vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false">
+  <a-scene id="scene" vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false">
     <!-- Ambiente -->
     <a-sky id="sky" color="#0b1020"></a-sky>
     <a-entity light="type: ambient; intensity: 0.45"></a-entity>
     <a-entity light="type: directional; intensity: 0.9" position="-2 6 -3"></a-entity>
+    <a-entity id="fog" fog="type: exponential; color: #0b1020; density: 0.02"></a-entity>
     <a-plane color="#1b5e20" rotation="-90 0 0" width="320" height="320" position="0 0 0"></a-plane>
 
     <!-- Raiz do mundo (trilha, árvores, marcadores, rio) -->
@@ -45,7 +47,7 @@
 
     <!-- Rig/câmera -->
     <a-entity id="rig" position="0 1.6 0" gamepad-walk="speed: 1.6">
-      <a-entity id="camera" camera look-controls wasd-controls="enabled:false"></a-entity>
+      <a-entity id="camera" camera look-controls wasd-controls="enabled:false" tabindex="0"></a-entity>
       <a-entity id="cursorMouse" cursor="fuse:false; rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
       <a-entity id="cursorGaze" position="0 0 -1"
         geometry="primitive: ring; radiusInner: 0.007; radiusOuter: 0.012"
@@ -87,7 +89,7 @@
     const infoTitle = document.getElementById('infoTitle');
     const infoText = document.getElementById('infoText');
     const playPauseBtn = document.getElementById('playPause');
-    const scene = document.querySelector('a-scene');
+    const scene = document.getElementById('scene');
     const rig = document.getElementById('rig');
     const camera = document.getElementById('camera');
     const cursorGaze = document.getElementById('cursorGaze');
@@ -97,7 +99,14 @@
       clearTimeout(flash._t); flash._t = setTimeout(()=>toast.style.display='none', ms);
     }
 
+    let ttsEnabled = false;
+    function maybeEnableTTS(){
+      if(ttsEnabled) return; ttsEnabled = true;
+      try{ const u = new SpeechSynthesisUtterance(''); speechSynthesis.speak(u);}catch(e){}
+    }
+
     function speak(text){
+      if(!ttsEnabled) return; // evita bloqueio em mobile até 1º gesto
       try{ const u = new SpeechSynthesisUtterance(text); u.lang='pt-BR'; u.rate=1; u.pitch=1; u.volume=.95; speechSynthesis.cancel(); speechSynthesis.speak(u);}catch(e){}
     }
 
@@ -107,84 +116,9 @@
     }
     function hideInfo(){ infoPanel.style.display = 'none'; try{ speechSynthesis.cancel(); }catch(e){} }
 
-    // ===== Curva, trilha visual e floresta =====
-    const curve = new THREE.CatmullRomCurve3(PATH.map(p=> new THREE.Vector3(p.x, 1.6, p.z)));
-    curve.curveType = 'catmullrom'; curve.tension = 0.5;
-
-    const worldRoot = document.getElementById('worldRoot');
-
-    // trilha: "estradinha" segmentada
-    function buildPath(){
-      const steps = 240; // qualidade do caminho
-      const pathWidth = 2.2; // largura do corredor
-      for(let i=0;i<steps;i++){
-        const t = i/(steps-1);
-        const p = curve.getPointAt(t);
-        const seg = document.createElement('a-plane');
-        seg.setAttribute('position', `${p.x} 0.01 ${p.z}`);
-        seg.setAttribute('rotation', '-90 0 0');
-        seg.setAttribute('width', pathWidth);
-        seg.setAttribute('height', 1.4);
-        seg.setAttribute('color', '#6b4f2a');
-        seg.setAttribute('opacity', '0.92');
-        worldRoot.appendChild(seg);
-      }
-    }
-
-    // árvores nas laterais, evitando o corredor
-    function buildForest(){
-      const safeR = 1.6; // raio seguro do corredor
-      function tooCloseToPath(x,z){
-        for(let s=0; s<=1; s+=0.05){
-          const c = curve.getPointAt(s);
-          const dx=x-c.x, dz=z-c.z; if((dx*dx+dz*dz) < (safeR*safeR)) return true;
-        }
-        return false;
-      }
-      for(let i=0;i<240;i++){
-        const x = (Math.random()*70-35);
-        const z = (Math.random()*-48);
-        if(tooCloseToPath(x,z)) continue;
-        const trunkH = 1.2 + Math.random()*1.2;
-        const crownR = 0.5 + Math.random()*0.9;
-        const trunk = document.createElement('a-cylinder');
-        trunk.setAttribute('position', `${x} ${trunkH/2} ${z}`);
-        trunk.setAttribute('radius', 0.08);
-        trunk.setAttribute('height', trunkH);
-        trunk.setAttribute('color', '#6b4f2a');
-        worldRoot.appendChild(trunk);
-        const crown = document.createElement('a-sphere');
-        crown.setAttribute('position', `${x} ${trunkH} ${z}`);
-        crown.setAttribute('radius', crownR);
-        crown.setAttribute('color', '#1e7b3b');
-        crown.setAttribute('material','roughness:1; metalness:0');
-        worldRoot.appendChild(crown);
-      }
-    }
-
-    // rio na área final
-    function buildRiver(){
-      const end = PATH[PATH.length-1];
-      const water = document.createElement('a-plane');
-      water.setAttribute('position', `${end.x-4} 0.02 ${end.z-6}`);
-      water.setAttribute('rotation', '-90 0 0');
-      water.setAttribute('width', 40);
-      water.setAttribute('height', 30);
-      water.setAttribute('color', '#0b6ea8');
-      water.setAttribute('material', 'opacity: 0.92');
-      water.setAttribute('animation__wave','property: material.opacity; dir: alternate; from: 0.88; to: 0.96; dur: 1600; loop: true; easing: easeInOutSine');
-      worldRoot.appendChild(water);
-
-      for(let i=0;i<24;i++){
-        const s = 0.2+Math.random()*0.5;
-        const dx = (Math.random()*14-7), dz=(Math.random()*4-2);
-        const rock = document.createElement('a-icosahedron');
-        rock.setAttribute('position', `${end.x-4+dx} 0.1 ${end.z-1+dz}`);
-        rock.setAttribute('radius', s);
-        rock.setAttribute('color', '#6d6d6d');
-        worldRoot.appendChild(rock);
-      }
-    }
+    // Fecha painel ao tocar fora (gesto leve para mobile)
+    infoPanel.addEventListener('click', hideInfo);
+    document.body.addEventListener('pointerdown', ()=>{ maybeEnableTTS(); });
 
     // ======= COMPONENTES DE DESIGN =======
     // 1) Sempre virada para a câmera (billboard)
@@ -206,7 +140,114 @@
       }
     });
 
+    // ===== Construção do mundo (após cena pronta) =====
+    let curve; // definida após A-Frame carregar
+    function buildWorld(){
+      // Curva, trilha visual e floresta
+      curve = new THREE.CatmullRomCurve3(PATH.map(p=> new THREE.Vector3(p.x, 1.6, p.z)));
+      curve.curveType = 'catmullrom'; curve.tension = 0.5;
+
+      const worldRoot = document.getElementById('worldRoot');
+
+      // trilha segmentada
+      (function buildPath(){
+        const steps = 240; // qualidade do caminho
+        const pathWidth = 2.2; // largura do corredor
+        for(let i=0;i<steps;i++){
+          const t = i/(steps-1);
+          const p = curve.getPointAt(t);
+          const seg = document.createElement('a-plane');
+          seg.setAttribute('position', `${p.x} 0.01 ${p.z}`);
+          seg.setAttribute('rotation', '-90 0 0');
+          seg.setAttribute('width', pathWidth);
+          seg.setAttribute('height', 1.4);
+          seg.setAttribute('color', '#6b4f2a');
+          seg.setAttribute('opacity', '0.92');
+          worldRoot.appendChild(seg);
+        }
+      })();
+
+      // árvores nas laterais, evitando o corredor
+      (function buildForest(){
+        const safeR = 1.6; // raio seguro do corredor
+        function tooCloseToPath(x,z){
+          for(let s=0; s<=1; s+=0.05){
+            const c = curve.getPointAt(s);
+            const dx=x-c.x, dz=z-c.z; if((dx*dx+dz*dz) < (safeR*safeR)) return true;
+          }
+          return false;
+        }
+        for(let i=0;i<240;i++){
+          const x = (Math.random()*70-35);
+          const z = (Math.random()*-48);
+          if(tooCloseToPath(x,z)) continue;
+          const trunkH = 1.2 + Math.random()*1.2;
+          const crownR = 0.5 + Math.random()*0.9;
+          const trunk = document.createElement('a-cylinder');
+          trunk.setAttribute('position', `${x} ${trunkH/2} ${z}`);
+          trunk.setAttribute('radius', 0.08);
+          trunk.setAttribute('height', trunkH);
+          trunk.setAttribute('color', '#6b4f2a');
+          worldRoot.appendChild(trunk);
+          const crown = document.createElement('a-sphere');
+          crown.setAttribute('position', `${x} ${trunkH} ${z}`);
+          crown.setAttribute('radius', crownR);
+          crown.setAttribute('color', '#1e7b3b');
+          crown.setAttribute('material','roughness:1; metalness:0');
+          worldRoot.appendChild(crown);
+        }
+      })();
+
+      // rio na área final
+      (function buildRiver(){
+        const end = PATH[PATH.length-1];
+        const water = document.createElement('a-plane');
+        water.setAttribute('position', `${end.x-4} 0.02 ${end.z-6}`);
+        water.setAttribute('rotation', '-90 0 0');
+        water.setAttribute('width', 40);
+        water.setAttribute('height', 30);
+        water.setAttribute('color', '#0b6ea8');
+        water.setAttribute('material', 'opacity: 0.92');
+        water.setAttribute('animation__wave','property: material.opacity; dir: alternate; from: 0.88; to: 0.96; dur: 1600; loop: true; easing: easeInOutSine');
+        worldRoot.appendChild(water);
+
+        for(let i=0;i<24;i++){
+          const s = 0.2+Math.random()*0.5;
+          const dx = (Math.random()*14-7), dz=(Math.random()*4-2);
+          const rock = document.createElement('a-icosahedron');
+          rock.setAttribute('position', `${end.x-4+dx} 0.1 ${end.z-1+dz}`);
+          rock.setAttribute('radius', s);
+          rock.setAttribute('color', '#6d6d6d');
+          worldRoot.appendChild(rock);
+        }
+      })();
+
+      // Marcadores e placas
+      (function placeMarkers(){
+        STOPS.forEach((s, i)=>{
+          const v = curve.getPointAt(s.t);
+          const last = (i === STOPS.length-1);
+          const marker = document.createElement('a-ring');
+          marker.setAttribute('position', `${v.x} 0.02 ${v.z}`);
+          marker.setAttribute('rotation', '-90 0 0');
+          marker.setAttribute('radius-inner', '0.12');
+          marker.setAttribute('radius-outer', '0.2');
+          marker.setAttribute('color', last ? '#22d3ee' : '#34d399');
+          marker.setAttribute('material', 'opacity:0.95');
+          marker.setAttribute('class', 'clickable');
+          marker.setAttribute('animation__pulse','property: scale; dir: alternate; from: 1 1 1; to: 1.2 1.2 1; dur: 900; loop: true; easing: easeInOutSine');
+          marker.addEventListener('click', ()=>{ pauseWalk(); showInfo(s.title, s.text); });
+          worldRoot.appendChild(marker);
+
+          createSignAt(v.x + 0.9, v.z + 0.7, s.title, s.text, last);
+        });
+      })();
+
+      flash('A caminhada vai começar. Olhe os marcadores para saber mais.');
+    }
+
     function createSignAt(x, z, title, text, highlight=false){
+      const worldRoot = document.getElementById('worldRoot');
       const sign = document.createElement('a-entity');
       sign.setAttribute('position', `${x} 0 ${z}`);
       sign.setAttribute('face-camera', '');
@@ -271,48 +312,23 @@
       return sign;
     }
 
-    function placeMarkers(){
-      STOPS.forEach((s, i)=>{
-        const v = curve.getPointAt(s.t);
-        const last = (i === STOPS.length-1);
-        const marker = document.createElement('a-ring');
-        marker.setAttribute('position', `${v.x} 0.02 ${v.z}`);
-        marker.setAttribute('rotation', '-90 0 0');
-        marker.setAttribute('radius-inner', '0.12');
-        marker.setAttribute('radius-outer', '0.2');
-        marker.setAttribute('color', last ? '#22d3ee' : '#34d399');
-        marker.setAttribute('material', 'opacity:0.95');
-        marker.setAttribute('class', 'clickable');
-        marker.setAttribute('animation__pulse','property: scale; dir: alternate; from: 1 1 1; to: 1.2 1.2 1; dur: 900; loop: true; easing: easeInOutSine');
-        marker.addEventListener('click', ()=>{ pauseWalk(); showInfo(s.title, s.text); });
-        worldRoot.appendChild(marker);
-
-        createSignAt(v.x + 0.9, v.z + 0.7, s.title, s.text, last);
-      });
-    }
-
     // ===== Caminhada automática =====
-    let walking = true; let t = 0; const speed = 0.06; // velocidade do parâmetro da trilha
+    let walking = true; let tParam = 0; const speedParam = 0.06; // velocidade do parâmetro da trilha
     function updateWalk(dt){
-      if(!walking) return;
-      t += speed * dt; if(t>1){ t = 1; pauseWalk(); flash('Chegamos ao rio!'); showInfo('Peixes do Tocantins', 'Tucunaré, Piau, Pacu e Surubim — cuide do equilíbrio do ecossistema.'); }
-      const pos = curve.getPointAt(t), dir = curve.getTangentAt(Math.max(0,t-0.001));
+      if(!walking || !curve) return;
+      tParam += speedParam * dt; if(tParam>1){ tParam = 1; pauseWalk(); flash('Chegamos ao rio!'); showInfo('Peixes do Tocantins', 'Tucunaré, Piau, Pacu e Surubim — cuide do equilíbrio do ecossistema.'); }
+      const pos = curve.getPointAt(tParam), dir = curve.getTangentAt(Math.max(0,tParam-0.001));
       rig.object3D.position.copy(pos);
       const look = pos.clone().add(dir); camera.object3D.lookAt(look);
 
-      for(const s of STOPS){ if(Math.abs(t - s.t) < 0.01){ showInfo(s.title, s.text); } }
+      for(const s of STOPS){ if(Math.abs(tParam - s.t) < 0.01){ showInfo(s.title, s.text); } }
     }
     function pauseWalk(){ walking = false; playPauseBtn.textContent = '▶️ Reproduzir'; document.getElementById('status').textContent = 'Caminhada: pausada'; }
     function playWalk(){ walking = true;  playPauseBtn.textContent = '⏸️ Pausar';     document.getElementById('status').textContent = 'Caminhada: tocando…'; hideInfo(); }
 
     // ===== Loop principal =====
-    let last = performance.now();
-    function loop(now){ const dt = (now-last)/1000; last = now; updateWalk(dt); requestAnimationFrame(loop); }
-    requestAnimationFrame(loop);
-
-    // ===== Construção inicial =====
-    buildPath(); buildForest(); buildRiver(); placeMarkers();
-    flash('A caminhada vai começar. Olhe os marcadores para saber mais.');
+    let lastTS = performance.now();
+    function loop(now){ const dt = (now-lastTS)/1000; lastTS = now; updateWalk(dt); requestAnimationFrame(loop); }
 
     // ===== HUD botões =====
     document.getElementById('enterVR').addEventListener('click', async ()=>{
@@ -322,7 +338,7 @@
         if(screen.orientation?.lock) await screen.orientation.lock('landscape');
       }catch(e){}
     });
-    playPauseBtn.addEventListener('click', ()=> walking ? pauseWalk() : playWalk());
+    playPauseBtn.addEventListener('click', ()=> { maybeEnableTTS(); walking ? pauseWalk() : playWalk(); });
     document.getElementById('sensorBtn').addEventListener('click', async ()=>{
       try{
         const needIOS = typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function';
@@ -345,8 +361,8 @@
         const ax = (pad.axes[0]||0), ay=(pad.axes[1]||0); const dead=0.18; const lx=Math.abs(ax)>dead?ax:0; const ly=Math.abs(ay)>dead?ay:0;
         if(lx||ly){ const dir = new THREE.Vector3(); camera.object3D.getWorldDirection(dir); dir.y=0; dir.normalize(); const right=new THREE.Vector3().crossVectors(dir,new THREE.Vector3(0,1,0)).multiplyScalar(-1); this.tmp.copy(dir).multiplyScalar(-ly).add(right.multiplyScalar(lx)).normalize(); this.vel.copy(this.tmp).multiplyScalar(this.data.speed*delta); this.el.object3D.position.add(this.vel); }
         const pressed=i=>!!(pad.buttons[i]&&pad.buttons[i].pressed); const edge=i=>{const p=pressed(i); const ch=p&&!this.lastBtn[i]; this.lastBtn[i]=p; return ch;};
-        if(edge(0)){ pauseWalk(); t=Math.min(1, t+0.08); flash('Avanço rápido'); }
-        if(edge(2)){ pauseWalk(); t=Math.max(0, t-0.08); flash('Retrocesso'); }
+        if(edge(0)){ pauseWalk(); tParam=Math.min(1, tParam+0.08); flash('Avanço rápido'); }
+        if(edge(2)){ pauseWalk(); tParam=Math.max(0, tParam-0.08); flash('Retrocesso'); }
         if(edge(3)){ walking? pauseWalk(): playWalk(); }
       }
     });
@@ -362,6 +378,13 @@
     });
     window.addEventListener("contextmenu", e=>e.preventDefault());
     window.addEventListener("pointerdown", ()=>{ const sc = document.querySelector('a-scene'); sc && sc.focus && sc.focus(); }, {once:true});
+
+    // ===== Inicialização segura =====
+    // Aguarda a cena estar carregada para garantir THREE disponível e DOM pronto.
+    scene.addEventListener('loaded', ()=>{
+      try{ buildWorld(); lastTS = performance.now(); requestAnimationFrame(loop); }
+      catch(err){ console.error(err); flash('Falha ao iniciar cena'); }
+    });
   </script>
 </body>
 </html>
