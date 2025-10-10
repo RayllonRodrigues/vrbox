@@ -2,185 +2,223 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0b132b" />
-  <title>Mapa Vivo das Águas do Tocantins — IV Ideathon Maker</title>
-  <meta name="description" content="Experiência imersiva em realidade virtual para educar e sensibilizar sobre os impactos das mudanças climáticas nas águas do Tocantins." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Mapa Vivo — Tour com Controle Bluetooth</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    :root{
-      --bg:#0b132b; --bg2:#1c2541; --accent:#3a86ff; --accent2:#00c2ff; --text:#e6eefc; --muted:#a7b5d6; --card:#0f1a35; --ok:#2dd4bf; --warn:#f59e0b;
-      color-scheme: dark;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--text)}
-    a{color:var(--accent)} a:hover{color:var(--accent2)}
-    .wrap{max-width:1100px;margin:0 auto;padding:20px}
-    header{position:sticky;top:0;backdrop-filter:saturate(140%) blur(8px);background:rgba(11,19,43,.6);border-bottom:1px solid rgba(255,255,255,.08);z-index:10}
-    nav{display:flex;gap:14px;align-items:center;justify-content:space-between}
-    .navlinks{display:flex;gap:10px;flex-wrap:wrap}
-    .btn{appearance:none;border:0;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;padding:.7rem 1rem;border-radius:.8rem;font-weight:700;cursor:pointer;box-shadow:0 10px 30px rgba(0,194,255,.25)}
-    .btn.secondary{background:#1f2a48;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.25)}
-    .btn.small{padding:.45rem .7rem;border-radius:.6rem;font-weight:600}
-
-    .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:28px;align-items:center;padding:40px 0}
-    .badge{display:inline-flex;gap:8px;align-items:center;font-weight:700;color:#aeefff;background:rgba(0,194,255,.12);border:1px solid rgba(0,194,255,.25);padding:.35rem .6rem;border-radius:999px}
-    .title{font-size:clamp(28px,4.5vw,46px);line-height:1.1;margin:.3rem 0 .8rem}
-    .lead{font-size:clamp(16px,2.2vw,19px);color:var(--muted)}
-    .card{background:linear-gradient(180deg,#0e1a36, #0b142b);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:18px}
-    .grid{display:grid;gap:18px}
-    .two{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .section{padding:54px 0}
-    h2{font-size:clamp(22px,3.2vw,30px);margin:0 0 12px}
-    p{margin:.6rem 0;color:#d9e6ff}
-    .ods{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-    .tag{font-weight:700;font-size:14px;padding:.35rem .55rem;border-radius:.5rem;border:1px solid rgba(255,255,255,.12);background:#122049;color:#bfe4ff}
-    footer{padding:40px 0;color:#9fb4dd}
-
-    /* progress bar */
-    .progress{position:fixed;left:0;top:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--ok));width:0%;z-index:20}
-
-    /* responsive */
-    @media (max-width: 900px){ .hero{grid-template-columns:1fr} }
+    :root{color-scheme:dark}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#000}
+    .hud{position:fixed;top:10px;left:10px;right:10px;display:flex;gap:.5rem;align-items:center;z-index:10}
+    .hud.hide{display:none}
+    .btn{cursor:pointer;border:0;border-radius:.6rem;padding:.55rem .85rem;background:#2563eb;color:#fff;font-weight:700;box-shadow:0 6px 22px rgba(0,0,0,.25)}
+    .btn.secondary{background:#374151}
+    .chip{background:rgba(0,0,0,.55);color:#fff;padding:.45rem .7rem;border-radius:.6rem;font-weight:700}
+    .toast{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:#111827;color:#fff;padding:.55rem .8rem;border-radius:.6rem;opacity:.96;display:none;z-index:10}
   </style>
 </head>
 <body>
-  <div class="progress" id="progress"></div>
-  <header>
-    <div class="wrap">
-      <nav>
-        <div style="display:flex;align-items:center;gap:10px">
-          <strong>Mapa Vivo das Águas</strong>
-          <span class="tag">IV Ideathon Maker</span>
-        </div>
-        <div class="navlinks">
-          <a class="btn small secondary" href="#problema">Problema</a>
-          <a class="btn small secondary" href="#solucao">Solução</a>
-          <a class="btn small secondary" href="#impacto">Impactos</a>
-          <a class="btn small" href="#demo">Abrir Demo VR</a>
-        </div>
-      </nav>
-    </div>
-  </header>
+  <!-- HUD -->
+  <div class="hud" id="hud">
+    <span class="chip" id="poiTitle">Ponto: Orla do Rio</span>
+    <button class="btn" id="playPause">⏯️ Pausar</button>
+    <button class="btn secondary" id="enterVR">🕶️ Modo VR</button>
+    <button class="btn secondary" id="sensorBtn">🎯 Sensores</button>
+  </div>
+  <div class="toast" id="toast"></div>
 
-  <main class="wrap">
-    <!-- HERO -->
-    <section class="hero section" id="inicio">
-      <div>
-        <span class="badge">Equipe <span id="team">(nome da equipe)</span> • IFTO — Campus Araguatins</span>
-        <h1 class="title">Mapa Vivo das Águas do Tocantins</h1>
-        <p class="lead">Uma experiência imersiva em <strong>realidade virtual</strong> para visualizar, entender e agir diante dos impactos das mudanças climáticas nos nossos rios e lagos.</p>
-        <div style="display:flex;gap:10px;margin-top:16px">
-          <a class="btn" href="#solucao">Conhecer solução</a>
-          <a class="btn secondary" href="#demo">Abrir Demo VR</a>
-        </div>
-      </div>
-      <div class="card">
-        <div class="grid two">
-          <div>
-            <h3 style="margin:0 0 8px">Abertura</h3>
-            <p>Olá! Nós somos a equipe <strong>(nome da equipe)</strong>, do <strong>IFTO – Campus Araguatins</strong>, e estamos participando do <strong>IV Ideathon Maker</strong>. Nossa proposta é o <strong>Mapa Vivo das Águas do Tocantins</strong>.</p>
-          </div>
-          <div>
-            <h3 style="margin:0 0 8px">Destaques</h3>
-            <ul style="margin:0;padding-left:18px;color:#cfe1ff">
-              <li>Exploração imersiva de rios e lagos do Tocantins</li>
-              <li>Dois cenários: <em>futuro sustentável</em> × <em>futuro de crise</em></li>
-              <li>Aplicação em escolas, feiras e ações comunitárias</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
+  <!-- Cena -->
+  <a-scene vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false">
+    <!-- Fundo procedural -->
+    <a-sky id="sky" color="#0b1020"></a-sky>
+    <a-entity light="type: ambient; intensity: 0.4"></a-entity>
+    <a-entity light="type: directional; intensity: 0.9" position="0 4 -2"></a-entity>
+    <a-plane color="#1b5e20" rotation="-90 0 0" width="120" height="120" position="0 0 0"></a-plane>
 
-    <!-- PROBLEMA -->
-    <section class="section" id="problema">
-      <h2>Problema</h2>
-      <div class="card">
-        <p>O Tocantins é um estado rico em recursos hídricos, mas grande parte da população, principalmente jovens e comunidades locais, não consegue perceber os impactos reais das mudanças climáticas em nossos rios e lagos. Essa falta de consciência dificulta o engajamento em práticas sustentáveis. Enchentes, secas e poluição já fazem parte da nossa realidade, mas muitas vezes não conseguimos visualizar de forma clara como essas transformações acontecem.</p>
-      </div>
-    </section>
+    <!-- Placas/Setas e POIs serão criados via JS em runtime -->
+    <a-entity id="sceneRoot"></a-entity>
 
-    <!-- SOLUÇÃO -->
-    <section class="section" id="solucao">
-      <h2>Solução</h2>
-      <div class="card">
-        <p>Desenvolvemos o <strong>Mapa Vivo das Águas do Tocantins</strong>: uma simulação <strong>em realidade virtual</strong> (VR) com uso de óculos 3D. O usuário explora os principais rios e lagos do estado e observa como as mudanças climáticas afetam o nível da água, a biodiversidade e a agricultura. Nosso diferencial é mostrar <strong>dois cenários possíveis</strong> — um futuro sustentável, construído com boas práticas ambientais, e um futuro de crise, caso nada seja feito.</p>
-        <div class="ods">
-          <span class="tag">ODS 6 • Água potável e saneamento</span>
-          <span class="tag">ODS 13 • Ação contra a mudança global do clima</span>
-          <span class="tag">ODS 15 • Vida terrestre</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- IMPACTOS -->
-    <section class="section" id="impacto">
-      <h2>Contribuições / Impactos</h2>
-      <div class="card">
-        <p>O Mapa Vivo promove impacto direto na <strong>educação ambiental</strong> e na <strong>conscientização da comunidade</strong>, alinhado aos ODS 6, 13 e 15. Pode ser aplicado em <strong>escolas</strong>, <strong>feiras científicas</strong> e <strong>atividades comunitárias</strong>, tornando-se uma ferramenta prática e acessível de sensibilização.</p>
-        <div class="grid two" style="margin-top:10px">
-          <div class="card" style="background:#0c1a33">
-            <h3 style="margin:0 0 8px">Para Educação</h3>
-            <p>Sequências didáticas, visita guiada VR e medição de aprendizagem com quizzes interativos.</p>
-          </div>
-          <div class="card" style="background:#0c1a33">
-            <h3 style="margin:0 0 8px">Para Comunidade</h3>
-            <p>Visualização clara de cenários de cheia/seca, restauração de matas ciliares e boas práticas de uso da água.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- DEMO / LINK VR -->
-    <section class="section" id="demo">
-      <h2>Demo VR</h2>
-      <div class="card">
-        <p>Abra no celular e toque em <strong>Modo VR</strong> para usar com seu óculos VR Box.</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-          <a class="btn" href="rota/index.html" target="_blank" rel="noopener">Abrir Rota Turística (VR)</a>
-          <a class="btn secondary" href="minigame/index.html" target="_blank" rel="noopener">Abrir Mini‑game (VR)</a>
-        </div>
-        <p style="margin-top:8px;color:var(--muted)">Se os arquivos não existirem ainda, você pode manter estes links como placeholders e publicar mais tarde.</p>
-      </div>
-    </section>
-
-    <!-- ENCERRAMENTO -->
-    <section class="section" id="encerramento">
-      <h2>Encerramento</h2>
-      <div class="card">
-        <p><strong>Mapa Vivo das Águas do Tocantins</strong>: uma experiência imersiva que une ciência, tecnologia e sustentabilidade para transformar nosso futuro. Muito obrigado(a) pela atenção!</p>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="wrap" style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap">
-      <small>© 2025 Equipe (nome da equipe) • IFTO — Campus Araguatins</small>
-      <div style="display:flex;gap:8px">
-        <a class="btn small secondary" href="#inicio">Voltar ao topo</a>
-        <a class="btn small" href="#demo">Abrir Demo VR</a>
-      </div>
-    </div>
-  </footer>
+    <!-- Câmera + cursores -->
+    <a-entity id="rig" position="0 1.6 0" gamepad-trail="speed: 1.6">
+      <a-entity id="camera" camera look-controls wasd-controls="enabled:false"></a-entity>
+      <!-- Cursor mouse/touch fora do VR -->
+      <a-entity id="cursorMouse" cursor="fuse:false; rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+      <!-- Cursor gaze dentro do VR -->
+      <a-entity id="cursorGaze" position="0 0 -1"
+        geometry="primitive: ring; radiusInner: 0.007; radiusOuter: 0.012"
+        material="color: #00e0b8; shader: flat"
+        cursor="fuse:true; fuseTimeout:1000"
+        raycaster="objects: .clickable"
+        visible="false"></a-entity>
+    </a-entity>
+  </a-scene>
 
   <script>
-    // Barra de progresso de leitura
-    const progress = document.getElementById('progress');
-    const onScroll = ()=>{
-      const h = document.documentElement; const sc = h.scrollTop; const d = h.scrollHeight - h.clientHeight;
-      const p = Math.max(0, Math.min(1, sc / d)); progress.style.width = (p*100)+'%';
-    };
-    document.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+    // ======= Dados da trilha (sem imagens/vídeos) =======
+    const POIS = [
+      { id:'orla',   label:'Orla do Rio',    pos:{x:  0, y:1.6, z:  0}, sky:'#0b1020' },
+      { id:'praca',  label:'Praça Central',  pos:{x:  8, y:1.6, z: -3}, sky:'#102033' },
+      { id:'campus', label:'IFTO Campus',    pos:{x: -6, y:1.6, z: -7}, sky:'#0a1a2a' },
+      { id:'ponte',  label:'Ponte',          pos:{x:  4, y:1.6, z: -12}, sky:'#08121f' },
+      { id:'mercado',label:'Mercado Público',pos:{x:-10, y:1.6, z: -16}, sky:'#0c1422' },
+    ];
 
-    // Navegação por seta/space entre seções
-    const sections = Array.from(document.querySelectorAll('.section'));
-    let current = 0;
-    function goto(i){ current = Math.max(0, Math.min(sections.length-1, i)); sections[current].scrollIntoView({behavior:'smooth'}); }
-    document.addEventListener('keydown', (e)=>{
-      if(e.key==='ArrowDown' || e.key==='PageDown' || e.key===' '){ e.preventDefault(); goto(current+1);} 
-      if(e.key==='ArrowUp'   || e.key==='PageUp'){ e.preventDefault(); goto(current-1);} 
+    // ======= Utilidades UI =======
+    const hud = document.getElementById('hud');
+    const toast = document.getElementById('toast');
+    const sky = document.getElementById('sky');
+    const title = document.getElementById('poiTitle');
+    const playPauseBtn = document.getElementById('playPause');
+    const scene = document.querySelector('a-scene');
+    const rig = document.getElementById('rig');
+    const cursorGaze = document.getElementById('cursorGaze');
+    let autoplay = true, autoTimer = null, idx = 0;
+
+    function flash(msg, ms=1400){
+      toast.textContent = msg; toast.style.display='block';
+      clearTimeout(flash._t); flash._t = setTimeout(()=>toast.style.display='none', ms);
+    }
+
+    // ======= Construção de placas e setas =======
+    const sceneRoot = document.getElementById('sceneRoot');
+    function buildPOIs(){
+      POIS.forEach((p,i)=>{
+        // Poste/placa com o nome do ponto
+        const post = document.createElement('a-cylinder');
+        post.setAttribute('position', `${p.pos.x} 0 ${p.pos.z}`);
+        post.setAttribute('radius', 0.05);
+        post.setAttribute('height', 1.4);
+        post.setAttribute('color', '#2f3b52');
+        sceneRoot.appendChild(post);
+
+        const plate = document.createElement('a-plane');
+        plate.setAttribute('position', `${p.pos.x} 1.1 ${p.pos.z}`);
+        plate.setAttribute('width', 1.6);
+        plate.setAttribute('height', 0.5);
+        plate.setAttribute('color', '#0e1a36');
+        plate.setAttribute('material', 'opacity:0.9');
+        plate.setAttribute('text', `value:${p.label}; color:#bfe4ff; align:center; width:4`);
+        sceneRoot.appendChild(plate);
+
+        // Seta “próximo” entre os pontos (gaze/click)
+        if(i < POIS.length-1){
+          const a = document.createElement('a-triangle');
+          const mid = midPoint(POIS[i].pos, POIS[i+1].pos);
+          a.setAttribute('position', `${mid.x} 1.0 ${mid.z}`);
+          a.setAttribute('rotation', `0 ${yawTo(POIS[i].pos, POIS[i+1].pos)} 0`);
+          a.setAttribute('scale', '0.6 0.6 0.6');
+          a.setAttribute('color', '#00e0b8');
+          a.setAttribute('class', 'clickable');
+          a.addEventListener('click', nextPOI);
+          sceneRoot.appendChild(a);
+        }
+      });
+    }
+    function midPoint(a,b){ return { x:(a.x+b.x)/2, y:1.0, z:(a.z+b.z)/2 }; }
+    function yawTo(a,b){
+      const dx = b.x - a.x, dz = b.z - a.z;
+      return (Math.atan2(dx, -dz) * 180/Math.PI).toFixed(2);
+    }
+
+    // ======= Lógica de tour =======
+    function setPOI(i, animate=true){
+      idx = (i + POIS.length) % POIS.length;
+      const p = POIS[idx];
+      title.textContent = 'Ponto: ' + p.label;
+      sky.setAttribute('color', p.sky);
+
+      // mover rig suavemente até o ponto
+      const to = new THREE.Vector3(p.pos.x, p.pos.y, p.pos.z);
+      if(animate){
+        const from = rig.object3D.position.clone();
+        const dur = 450; const t0 = performance.now();
+        const step = (t) => {
+          const k = Math.min(1, (t - t0) / dur);
+          rig.object3D.position.lerpVectors(from, to, k);
+          if (k < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      } else {
+        rig.object3D.position.copy(to);
+      }
+      flash(`Indo para ${p.label}`);
+    }
+    function nextPOI(){ setPOI(idx+1); }
+    function prevPOI(){ setPOI(idx-1); }
+
+    function startAutoplay(){
+      stopAutoplay();
+      autoplay = true;
+      playPauseBtn.textContent = '⏸️ Pausar';
+      autoTimer = setInterval(nextPOI, 4000);
+    }
+    function stopAutoplay(){
+      autoplay = false;
+      playPauseBtn.textContent = '▶️ Reproduzir';
+      clearInterval(autoTimer); autoTimer = null;
+    }
+
+    // ======= HUD botões =======
+    document.getElementById('enterVR').addEventListener('click', ()=> scene.enterVR && scene.enterVR());
+    playPauseBtn.addEventListener('click', ()=> autoplay ? stopAutoplay() : startAutoplay());
+    document.getElementById('sensorBtn').addEventListener('click', async ()=>{
+      try{
+        const needIOS = typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function';
+        if(needIOS){ const res = await DeviceMotionEvent.requestPermission(); flash(res==='granted'?'Sensores ativados':'Permissão negada'); }
+        else flash('Sensores prontos');
+      }catch{ flash('Não foi possível ativar sensores'); }
     });
+
+    // ======= VR enter/exit =======
+    scene.addEventListener('enter-vr', ()=>{
+      hud.classList.add('hide');
+      cursorGaze.setAttribute('visible', true);
+      screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(()=>{});
+    });
+    scene.addEventListener('exit-vr', ()=>{
+      hud.classList.remove('hide');
+      cursorGaze.setAttribute('visible', false);
+    });
+
+    // ======= Gamepad (controle Bluetooth) =======
+    AFRAME.registerComponent('gamepad-trail', {
+      schema: { speed: {default: 1.6} },
+      init(){ this.lastBtn = {}; this.tmp = new THREE.Vector3(); this.vel = new THREE.Vector3(); },
+      tick(t, dt){
+        const delta = (dt||0)/1000;
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const pad = (pads && pads[0]) || null; if(!pad) return;
+
+        // Eixos
+        const ax = (pad.axes[0] || 0), ay = (pad.axes[1] || 0);
+        const dead = 0.18;
+        const lx = Math.abs(ax) > dead ? ax : 0;
+        const ly = Math.abs(ay) > dead ? ay : 0;
+
+        if(lx || ly){
+          const cam = document.getElementById('camera');
+          const dir = new THREE.Vector3();
+          cam.object3D.getWorldDirection(dir); dir.y = 0; dir.normalize();
+          const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0,1,0)).multiplyScalar(-1);
+          this.tmp.copy(dir).multiplyScalar(-ly).add(right.multiplyScalar(lx)).normalize();
+          this.vel.copy(this.tmp).multiplyScalar(this.data.speed * delta);
+          this.el.object3D.position.add(this.vel);
+        }
+
+        const pressed = i => !!(pad.buttons[i] && pad.buttons[i].pressed);
+        const edge = i => { const p = pressed(i); const ch = p && !this.lastBtn[i]; this.lastBtn[i]=p; return ch; };
+        if(edge(0)) { stopAutoplay(); nextPOI(); } // A
+        if(edge(1)) { stopAutoplay(); prevPOI(); } // B
+      }
+    });
+
+    // ======= Boot =======
+    buildPOIs();
+    setPOI(0, false);
+    startAutoplay();
+
+    // dica inicial
+    flash('Controle conectado? A=Próximo, B=Anterior • Analógico: andar');
+
   </script>
 </body>
 </html>
