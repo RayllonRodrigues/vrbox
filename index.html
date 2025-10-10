@@ -380,11 +380,17 @@
     window.addEventListener("pointerdown", ()=>{ const sc = document.querySelector('a-scene'); sc && sc.focus && sc.focus(); }, {once:true});
 
     // ===== Inicialização segura =====
-    // Aguarda a cena estar carregada para garantir THREE disponível e DOM pronto.
-    scene.addEventListener('loaded', ()=>{
+    // Garante construção mesmo se a cena já tiver carregado antes deste script.
+    function startApp(){
       try{ buildWorld(); lastTS = performance.now(); requestAnimationFrame(loop); }
       catch(err){ console.error(err); flash('Falha ao iniciar cena'); }
-    });
+    }
+
+    if (scene.hasLoaded) {
+      startApp();
+    } else {
+      scene.addEventListener('loaded', startApp);
+    }
   </script>
 </body>
 </html>
