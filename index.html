@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Mapa Vivo — Tour com Controle Bluetooth</title>
+  <title>Mapa Vivo — Caminhada Guiada (árvores/peixes)</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     :root{color-scheme:dark}
@@ -14,35 +14,37 @@
     .btn.secondary{background:#374151}
     .chip{background:rgba(0,0,0,.55);color:#fff;padding:.45rem .7rem;border-radius:.6rem;font-weight:700}
     .toast{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:#111827;color:#fff;padding:.55rem .8rem;border-radius:.6rem;opacity:.96;display:none;z-index:10}
+    .panel{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:rgba(0,0,0,.65);backdrop-filter:blur(6px);color:#e6f3ff;padding:.8rem 1rem;border-radius:.8rem;max-width:92vw;display:none;z-index:10}
+    .panel h3{margin:.2rem 0 .3rem;font-size:1rem}
+    .panel p{margin:0;color:#c9d9f3;font-size:.95rem}
   </style>
 </head>
 <body>
   <!-- HUD -->
   <div class="hud" id="hud">
-    <span class="chip" id="poiTitle">Ponto: Orla do Rio</span>
-    <button class="btn" id="playPause">⏯️ Pausar</button>
+    <span class="chip" id="status">Caminhada: tocando…</span>
+    <button class="btn" id="playPause">⏸️ Pausar</button>
     <button class="btn secondary" id="enterVR">🕶️ Modo VR</button>
     <button class="btn secondary" id="sensorBtn">🎯 Sensores</button>
   </div>
   <div class="toast" id="toast"></div>
+  <div class="panel" id="infoPanel"><h3 id="infoTitle">Título</h3><p id="infoText">Texto</p></div>
 
   <!-- Cena -->
   <a-scene vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false">
-    <!-- Fundo procedural -->
+    <!-- Ambiente procedural (sem imagens/vídeos) -->
     <a-sky id="sky" color="#0b1020"></a-sky>
-    <a-entity light="type: ambient; intensity: 0.4"></a-entity>
-    <a-entity light="type: directional; intensity: 0.9" position="0 4 -2"></a-entity>
-    <a-plane color="#1b5e20" rotation="-90 0 0" width="120" height="120" position="0 0 0"></a-plane>
+    <a-entity light="type: ambient; intensity: 0.45"></a-entity>
+    <a-entity light="type: directional; intensity: 0.9" position="-2 6 -3"></a-entity>
+    <a-plane color="#1b5e20" rotation="-90 0 0" width="200" height="200" position="0 0 0"></a-plane>
 
-    <!-- Placas/Setas e POIs serão criados via JS em runtime -->
-    <a-entity id="sceneRoot"></a-entity>
+    <!-- Raiz p/ objetos construídos via JS (árvores, placas, marcadores) -->
+    <a-entity id="worldRoot"></a-entity>
 
-    <!-- Câmera + cursores -->
-    <a-entity id="rig" position="0 1.6 0" gamepad-trail="speed: 1.6">
+    <!-- Rig/câmera -->
+    <a-entity id="rig" position="0 1.6 0" gamepad-walk="speed: 1.6">
       <a-entity id="camera" camera look-controls wasd-controls="enabled:false"></a-entity>
-      <!-- Cursor mouse/touch fora do VR -->
       <a-entity id="cursorMouse" cursor="fuse:false; rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
-      <!-- Cursor gaze dentro do VR -->
       <a-entity id="cursorGaze" position="0 0 -1"
         geometry="primitive: ring; radiusInner: 0.007; radiusOuter: 0.012"
         material="color: #00e0b8; shader: flat"
@@ -53,113 +55,146 @@
   </a-scene>
 
   <script>
-    // ======= Dados da trilha (sem imagens/vídeos) =======
-    const POIS = [
-      { id:'orla',   label:'Orla do Rio',    pos:{x:  0, y:1.6, z:  0}, sky:'#0b1020' },
-      { id:'praca',  label:'Praça Central',  pos:{x:  8, y:1.6, z: -3}, sky:'#102033' },
-      { id:'campus', label:'IFTO Campus',    pos:{x: -6, y:1.6, z: -7}, sky:'#0a1a2a' },
-      { id:'ponte',  label:'Ponte',          pos:{x:  4, y:1.6, z: -12}, sky:'#08121f' },
-      { id:'mercado',label:'Mercado Público',pos:{x:-10, y:1.6, z: -16}, sky:'#0c1422' },
+    // ===== Dados do caminho (pontos Catmull-Rom) =====
+    // Trajeto: vila -> trilha com árvores -> margem do rio
+    const PATH = [
+      {x: 0,  z:  0},   // início
+      {x: 4,  z: -2},
+      {x: 9,  z: -5},
+      {x: 12, z: -9},
+      {x: 10, z: -13},
+      {x: 6,  z: -16},
+      {x: 2,  z: -18},
+      {x:-3,  z: -20},  // margem do rio
     ];
 
-    // ======= Utilidades UI =======
+    // Paradas educativas ao longo do caminho (t ~ 0..1)
+    const STOPS = [
+      { t: 0.15, title: 'Andiroba (Carapa guianensis)', text: 'Árvore nativa; óleo usado em fitoterapia e repelente natural.' },
+      { t: 0.32, title: 'Açaí (Euterpe oleracea)', text: 'Palmeira de várzea; frutos viram alimento e renda para comunidades ribeirinhas.' },
+      { t: 0.50, title: 'Buriti (Mauritia flexuosa)', text: 'Presente em áreas alagadas; importante para aves e controle microclimático.' },
+      { t: 0.72, title: 'Vitória-régia (Victoria amazonica)', text: 'Planta aquática símbolo da região; folhas flutuantes gigantes.' },
+      // parada final no rio (peixes)
+      { t: 0.92, title: 'Peixes do Tocantins', text: 'Tucunaré, Piau, Pacu e Surubim: espécies importantes para subsistência e ecossistema.' }
+    ];
+
+    // ===== Utilidades UI =====
     const hud = document.getElementById('hud');
     const toast = document.getElementById('toast');
-    const sky = document.getElementById('sky');
-    const title = document.getElementById('poiTitle');
+    const infoPanel = document.getElementById('infoPanel');
+    const infoTitle = document.getElementById('infoTitle');
+    const infoText = document.getElementById('infoText');
     const playPauseBtn = document.getElementById('playPause');
     const scene = document.querySelector('a-scene');
     const rig = document.getElementById('rig');
+    const camera = document.getElementById('camera');
     const cursorGaze = document.getElementById('cursorGaze');
-    let autoplay = true, autoTimer = null, idx = 0;
 
     function flash(msg, ms=1400){
       toast.textContent = msg; toast.style.display='block';
       clearTimeout(flash._t); flash._t = setTimeout(()=>toast.style.display='none', ms);
     }
 
-    // ======= Construção de placas e setas =======
-    const sceneRoot = document.getElementById('sceneRoot');
-    function buildPOIs(){
-      POIS.forEach((p,i)=>{
-        // Poste/placa com o nome do ponto
+    function showInfo(title, text){
+      infoTitle.textContent = title; infoText.textContent = text;
+      infoPanel.style.display = 'block';
+      // Narração (opcional, se suportado)
+      try{
+        const utter = new SpeechSynthesisUtterance(`${title}. ${text}`);
+        utter.lang = 'pt-BR'; utter.rate = 1; utter.pitch = 1; utter.volume = .9;
+        window.speechSynthesis.cancel(); window.speechSynthesis.speak(utter);
+      }catch(e){}
+    }
+    function hideInfo(){ infoPanel.style.display = 'none'; try{ window.speechSynthesis.cancel(); }catch(e){} }
+
+    // ===== Interpolação Catmull-Rom =====
+    // Constrói um CatmullRomCurve3 a partir dos pontos do PATH
+    const curve = new THREE.CatmullRomCurve3(PATH.map(p=> new THREE.Vector3(p.x, 1.6, p.z)));
+    curve.curveType = 'catmullrom'; curve.tension = 0.5;
+
+    // ===== Construção de cenário: árvores simples e marcadores =====
+    const worldRoot = document.getElementById('worldRoot');
+    function rand(a,b){ return Math.random()*(b-a)+a; }
+    function placeTrees(){
+      for(let i=0;i<80;i++){
+        const x = rand(-18,18), z = rand(-24,4);
+        // Evita colar na trilha (uma faixa livre)
+        if(Math.abs(z) < 1 && Math.abs(x) < 2) continue;
+        const trunk = document.createElement('a-cylinder');
+        trunk.setAttribute('position', `${x} 0 ${z}`);
+        trunk.setAttribute('radius', 0.08);
+        trunk.setAttribute('height', rand(1.2,1.8));
+        trunk.setAttribute('color', '#6b4f2a');
+        worldRoot.appendChild(trunk);
+        const crown = document.createElement('a-sphere');
+        crown.setAttribute('position', `${x} ${rand(1.2,1.8)} ${z}`);
+        crown.setAttribute('radius', rand(0.5,0.9));
+        crown.setAttribute('color', '#1e7b3b');
+        crown.setAttribute('material','roughness:1; metalness:0');
+        worldRoot.appendChild(crown);
+      }
+    }
+
+    function placeMarkers(){
+      STOPS.forEach((s, i)=>{
+        const v = curve.getPointAt(s.t);
+        // Poste e placa próximos ao caminho
         const post = document.createElement('a-cylinder');
-        post.setAttribute('position', `${p.pos.x} 0 ${p.pos.z}`);
-        post.setAttribute('radius', 0.05);
-        post.setAttribute('height', 1.4);
-        post.setAttribute('color', '#2f3b52');
-        sceneRoot.appendChild(post);
+        post.setAttribute('position', `${v.x+0.6} 0 ${v.z+0.6}`);
+        post.setAttribute('radius', 0.05); post.setAttribute('height', 1.2);
+        post.setAttribute('color', '#2f3b52'); worldRoot.appendChild(post);
 
         const plate = document.createElement('a-plane');
-        plate.setAttribute('position', `${p.pos.x} 1.1 ${p.pos.z}`);
-        plate.setAttribute('width', 1.6);
-        plate.setAttribute('height', 0.5);
-        plate.setAttribute('color', '#0e1a36');
-        plate.setAttribute('material', 'opacity:0.9');
-        plate.setAttribute('text', `value:${p.label}; color:#bfe4ff; align:center; width:4`);
-        sceneRoot.appendChild(plate);
+        plate.setAttribute('position', `${v.x+0.6} 1 ${v.z+0.6}`);
+        plate.setAttribute('width', 1.8); plate.setAttribute('height', 0.6);
+        plate.setAttribute('color', '#0e1a36'); plate.setAttribute('material','opacity:0.95');
+        plate.setAttribute('text', `value:${s.title}; color:#bfe4ff; align:center; width:4`);
+        worldRoot.appendChild(plate);
 
-        // Seta “próximo” entre os pontos (gaze/click)
-        if(i < POIS.length-1){
-          const a = document.createElement('a-triangle');
-          const mid = midPoint(POIS[i].pos, POIS[i+1].pos);
-          a.setAttribute('position', `${mid.x} 1.0 ${mid.z}`);
-          a.setAttribute('rotation', `0 ${yawTo(POIS[i].pos, POIS[i+1].pos)} 0`);
-          a.setAttribute('scale', '0.6 0.6 0.6');
-          a.setAttribute('color', '#00e0b8');
-          a.setAttribute('class', 'clickable');
-          a.addEventListener('click', nextPOI);
-          sceneRoot.appendChild(a);
-        }
+        // Marcador clicável (gaze) para abrir info e pausar
+        const marker = document.createElement('a-torus-knot');
+        marker.setAttribute('position', `${v.x} 1 ${v.z}`);
+        marker.setAttribute('scale', '0.3 0.3 0.3');
+        marker.setAttribute('color', i === STOPS.length-1 ? '#00e0ff' : '#00e0b8');
+        marker.setAttribute('class', 'clickable');
+        marker.setAttribute('animation__rot','property: rotation; to: 0 360 0; loop: true; dur: 3500; easing: linear');
+        marker.addEventListener('click', ()=>{ pauseWalk(); showInfo(s.title, s.text); });
+        worldRoot.appendChild(marker);
       });
     }
-    function midPoint(a,b){ return { x:(a.x+b.x)/2, y:1.0, z:(a.z+b.z)/2 }; }
-    function yawTo(a,b){
-      const dx = b.x - a.x, dz = b.z - a.z;
-      return (Math.atan2(dx, -dz) * 180/Math.PI).toFixed(2);
-    }
 
-    // ======= Lógica de tour =======
-    function setPOI(i, animate=true){
-      idx = (i + POIS.length) % POIS.length;
-      const p = POIS[idx];
-      title.textContent = 'Ponto: ' + p.label;
-      sky.setAttribute('color', p.sky);
+    // ===== Caminhada automática ao longo da curva =====
+    let walking = true; let t = 0; const speed = 0.06; // velocidade do parâmetro (ajuste geral)
+    function updateWalk(dt){
+      if(!walking) return;
+      t += speed * dt; if(t>1){ t = 1; pauseWalk(); flash('Chegamos ao rio!'); showInfo('Peixes do Tocantins', 'Tucunaré, Piau, Pacu e Surubim: mantenha o equilíbrio do ecossistema.'); }
+      const pos = curve.getPointAt(t), dir = curve.getTangentAt(Math.max(0,t-0.001));
+      rig.object3D.position.copy(pos);
+      // vira a câmera na direção da trilha
+      const look = pos.clone().add(dir); camera.object3D.lookAt(look);
 
-      // mover rig suavemente até o ponto
-      const to = new THREE.Vector3(p.pos.x, p.pos.y, p.pos.z);
-      if(animate){
-        const from = rig.object3D.position.clone();
-        const dur = 450; const t0 = performance.now();
-        const step = (t) => {
-          const k = Math.min(1, (t - t0) / dur);
-          rig.object3D.position.lerpVectors(from, to, k);
-          if (k < 1) requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
-      } else {
-        rig.object3D.position.copy(to);
+      // Abre painéis quando aproximar de um stop (auto)
+      for(const s of STOPS){
+        if(Math.abs(t - s.t) < 0.01){ // janela de proximidade
+          showInfo(s.title, s.text);
+        }
       }
-      flash(`Indo para ${p.label}`);
-    }
-    function nextPOI(){ setPOI(idx+1); }
-    function prevPOI(){ setPOI(idx-1); }
-
-    function startAutoplay(){
-      stopAutoplay();
-      autoplay = true;
-      playPauseBtn.textContent = '⏸️ Pausar';
-      autoTimer = setInterval(nextPOI, 4000);
-    }
-    function stopAutoplay(){
-      autoplay = false;
-      playPauseBtn.textContent = '▶️ Reproduzir';
-      clearInterval(autoTimer); autoTimer = null;
     }
 
-    // ======= HUD botões =======
+    function pauseWalk(){ walking = false; playPauseBtn.textContent = '▶️ Reproduzir'; document.getElementById('status').textContent = 'Caminhada: pausada'; }
+    function playWalk(){ walking = true; playPauseBtn.textContent = '⏸️ Pausar'; document.getElementById('status').textContent = 'Caminhada: tocando…'; hideInfo(); }
+
+    // ===== Loop simples (requestAnimationFrame) =====
+    let last = performance.now();
+    function loop(now){ const dt = (now-last)/1000; last = now; updateWalk(dt); requestAnimationFrame(loop); }
+    requestAnimationFrame(loop);
+
+    // ===== Construção inicial =====
+    placeTrees(); placeMarkers(); flash('A caminhada começará. Olhe os marcadores para saber mais.');
+
+    // ===== HUD botões =====
     document.getElementById('enterVR').addEventListener('click', ()=> scene.enterVR && scene.enterVR());
-    playPauseBtn.addEventListener('click', ()=> autoplay ? stopAutoplay() : startAutoplay());
+    playPauseBtn.addEventListener('click', ()=> walking ? pauseWalk() : playWalk());
     document.getElementById('sensorBtn').addEventListener('click', async ()=>{
       try{
         const needIOS = typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function';
@@ -168,57 +203,24 @@
       }catch{ flash('Não foi possível ativar sensores'); }
     });
 
-    // ======= VR enter/exit =======
-    scene.addEventListener('enter-vr', ()=>{
-      hud.classList.add('hide');
-      cursorGaze.setAttribute('visible', true);
-      screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(()=>{});
-    });
-    scene.addEventListener('exit-vr', ()=>{
-      hud.classList.remove('hide');
-      cursorGaze.setAttribute('visible', false);
-    });
+    // ===== VR enter/exit =====
+    scene.addEventListener('enter-vr', ()=>{ hud.classList.add('hide'); cursorGaze.setAttribute('visible', true); screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(()=>{}); });
+    scene.addEventListener('exit-vr',  ()=>{ hud.classList.remove('hide'); cursorGaze.setAttribute('visible', false); });
 
-    // ======= Gamepad (controle Bluetooth) =======
-    AFRAME.registerComponent('gamepad-trail', {
+    // ===== Gamepad (controle Bluetooth): analógico para andar livre; A/B pausar/retomar e saltar trechos =====
+    AFRAME.registerComponent('gamepad-walk', {
       schema: { speed: {default: 1.6} },
       init(){ this.lastBtn = {}; this.tmp = new THREE.Vector3(); this.vel = new THREE.Vector3(); },
-      tick(t, dt){
-        const delta = (dt||0)/1000;
-        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const pad = (pads && pads[0]) || null; if(!pad) return;
-
-        // Eixos
-        const ax = (pad.axes[0] || 0), ay = (pad.axes[1] || 0);
-        const dead = 0.18;
-        const lx = Math.abs(ax) > dead ? ax : 0;
-        const ly = Math.abs(ay) > dead ? ay : 0;
-
-        if(lx || ly){
-          const cam = document.getElementById('camera');
-          const dir = new THREE.Vector3();
-          cam.object3D.getWorldDirection(dir); dir.y = 0; dir.normalize();
-          const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0,1,0)).multiplyScalar(-1);
-          this.tmp.copy(dir).multiplyScalar(-ly).add(right.multiplyScalar(lx)).normalize();
-          this.vel.copy(this.tmp).multiplyScalar(this.data.speed * delta);
-          this.el.object3D.position.add(this.vel);
-        }
-
-        const pressed = i => !!(pad.buttons[i] && pad.buttons[i].pressed);
-        const edge = i => { const p = pressed(i); const ch = p && !this.lastBtn[i]; this.lastBtn[i]=p; return ch; };
-        if(edge(0)) { stopAutoplay(); nextPOI(); } // A
-        if(edge(1)) { stopAutoplay(); prevPOI(); } // B
+      tick(ti, dt){
+        const delta = (dt||0)/1000; const pads = navigator.getGamepads ? navigator.getGamepads() : []; const pad = (pads && pads[0]) || null; if(!pad) return;
+        const ax = (pad.axes[0]||0), ay=(pad.axes[1]||0); const dead=0.18; const lx=Math.abs(ax)>dead?ax:0; const ly=Math.abs(ay)>dead?ay:0;
+        if(lx||ly){ const dir = new THREE.Vector3(); camera.object3D.getWorldDirection(dir); dir.y=0; dir.normalize(); const right=new THREE.Vector3().crossVectors(dir,new THREE.Vector3(0,1,0)).multiplyScalar(-1); this.tmp.copy(dir).multiplyScalar(-ly).add(right.multiplyScalar(lx)).normalize(); this.vel.copy(this.tmp).multiplyScalar(this.data.speed*delta); this.el.object3D.position.add(this.vel); }
+        const pressed=i=>!!(pad.buttons[i]&&pad.buttons[i].pressed); const edge=i=>{const p=pressed(i); const ch=p&&!this.lastBtn[i]; this.lastBtn[i]=p; return ch;};
+        if(edge(0)){ pauseWalk(); t=Math.min(1, t+0.08); flash('Avanço rápido'); }   // A: avança trecho
+        if(edge(1)){ pauseWalk(); t=Math.max(0, t-0.08); flash('Retrocesso'); }     // B: volta trecho
+        if(edge(3)){ walking? pauseWalk(): playWalk(); }                               // Y: play/pause
       }
     });
-
-    // ======= Boot =======
-    buildPOIs();
-    setPOI(0, false);
-    startAutoplay();
-
-    // dica inicial
-    flash('Controle conectado? A=Próximo, B=Anterior • Analógico: andar');
-
   </script>
 </body>
 </html>
