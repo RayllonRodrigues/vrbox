@@ -41,7 +41,9 @@
   <div class="panel" id="infoPanel"><h3 id="infoTitle">Título</h3><p id="infoText">Texto</p></div>
 
   <!-- Cena -->
-  <a-scene id="scene" vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false" auto-walk>
+  <a-scene id="scene"$1 auto-walk>
+    <!-- Céu panorâmico (CORS ok) -->
+    <a-sky id="sky" src="https://cdn.polyhaven.com/asset_img/primary/forest_sunset_01_2k.jpg" rotation="0 -90 0"></a-sky>
     <!-- Ambiente de floresta (horizonte/iluminação) -->
     <a-entity environment="preset: forest; ground: flat; groundColor: #25331e; groundYScale: 6; skyType: gradient; skyColor: #062a42; horizonColor: #0b3d3f; lighting: distant; fog: 0.35; grid: none; dressing: none"></a-entity>
 
@@ -52,7 +54,7 @@
 
     <!-- Solo com textura TILEABLE (CORS ok - threejs) -->
     <a-plane id="ground" rotation="-90 0 0" width="320" height="320" position="0 0 0"
-      material="src: url(https://threejs.org/examples/textures/terrain/grasslight-big.jpg); repeat: 80 80; metalness:0; roughness:1;">
+      material="src: url(https://cdn.polyhaven.com/asset_img/primary/ground_forest_leaves_02.jpg); repeat: 80 80; metalness:0; roughness:1;">
     </a-plane>
 
     <!-- Mundo (trilha, árvores, marcadores, rio) -->
@@ -143,14 +145,14 @@
       rig.object3D.position.copy(startPos); camera.object3D.lookAt(startPos.clone().add(startDir));
 
       // 1) TRILHA: segmentos tileable
-      (function buildPath(){ const steps = 240; const pathWidth = 2.4; for(let i=0;i<steps;i++){ const t = i/(steps-1); const p = curve.getPointAt(t); const seg = document.createElement('a-plane'); seg.setAttribute('position', `${p.x} 0.01 ${p.z}`); seg.setAttribute('rotation', '-90 0 0'); seg.setAttribute('width', pathWidth); seg.setAttribute('height', 1.4); seg.setAttribute('material', 'src: url(https://threejs.org/examples/textures/terrain/grasslight-big.jpg); repeat: 4 1; metalness:0; roughness:1; opacity:0.98'); worldRoot.appendChild(seg);} })();
+      (function buildPath(){ const steps = 240; const pathWidth = 2.4; for(let i=0;i<steps;i++){ const t = i/(steps-1); const p = curve.getPointAt(t); const seg = document.createElement('a-plane'); seg.setAttribute('position', `${p.x} 0.01 ${p.z}`); seg.setAttribute('rotation', '-90 0 0'); seg.setAttribute('width', pathWidth); seg.setAttribute('height', 1.4); seg.setAttribute('material', 'src: url(https://cdn.polyhaven.com/asset_img/primary/ground_mud_01.jpg); repeat: 4 1; metalness:0; roughness:1; opacity:0.98'); repeat: 4 1; metalness:0; roughness:1; opacity:0.98'); worldRoot.appendChild(seg);} })();
 
       // 2) ÁRVORES: procedurais leves (mobile-friendly)
       ;(function buildForest(){ const safeR = 1.7; function tooCloseToPath(x,z){ for(let s=0; s<=1; s+=0.05){ const c = curve.getPointAt(s); const dx=x-c.x, dz=z-c.z; if((dx*dx+dz*dz) < (safeR*safeR)) return true; } return false; }
         for(let i=0;i<220;i++){ const x=(Math.random()*70-35), z=(Math.random()*-48); if(tooCloseToPath(x,z)) continue; const trunkH=1.2+Math.random()*1.2; const crownR=0.5+Math.random()*0.9; const trunk=document.createElement('a-cylinder'); trunk.setAttribute('position', `${x} ${trunkH/2} ${z}`); trunk.setAttribute('radius', 0.08); trunk.setAttribute('height', trunkH); trunk.setAttribute('color', '#6b4f2a'); worldRoot.appendChild(trunk); const crown=document.createElement('a-sphere'); crown.setAttribute('position', `${x} ${trunkH} ${z}`); crown.setAttribute('radius', crownR); crown.setAttribute('color', '#2a7b4c'); crown.setAttribute('material','roughness:1; metalness:0'); worldRoot.appendChild(crown);} })();
 
       // 3) RIO: água tileable + animação
-      ;(function buildRiver(){ const end = PATH[PATH.length-1]; const water=document.createElement('a-plane'); water.setAttribute('position', `${end.x-4} 0.02 ${end.z-6}`); water.setAttribute('rotation', '-90 0 0'); water.setAttribute('width', 40); water.setAttribute('height', 30); water.setAttribute('material', 'src: url(https://threejs.org/examples/textures/water.jpg); repeat: 10 8; metalness:0.15; roughness:0.35; opacity:0.92'); water.setAttribute('animation__wave','property: material.offset; to: 0 1; dur: 8000; easing: linear; loop: true'); worldRoot.appendChild(water); for(let i=0;i<24;i++){ const s = 0.2+Math.random()*0.5; const dx=(Math.random()*14-7), dz=(Math.random()*4-2); const rock=document.createElement('a-icosahedron'); rock.setAttribute('position', `${end.x-4+dx} 0.1 ${end.z-1+dz}`); rock.setAttribute('radius', s); rock.setAttribute('color', '#6d6d6d'); worldRoot.appendChild(rock);} })();
+      ;(function buildRiver(){ const end = PATH[PATH.length-1]; const water=document.createElement('a-plane'); water.setAttribute('position', `${end.x-4} 0.02 ${end.z-6}`); water.setAttribute('rotation', '-90 0 0'); water.setAttribute('width', 40); water.setAttribute('height', 30); water.setAttribute('material', 'src: url(https://cdn.polyhaven.com/asset_img/primary/water_surface_01.jpg); repeat: 10 8; metalness:0.15; roughness:0.35; opacity:0.92'); repeat: 10 8; metalness:0.15; roughness:0.35; opacity:0.92'); water.setAttribute('animation__wave','property: material.offset; to: 0 1; dur: 8000; easing: linear; loop: true'); worldRoot.appendChild(water); for(let i=0;i<24;i++){ const s = 0.2+Math.random()*0.5; const dx=(Math.random()*14-7), dz=(Math.random()*4-2); const rock=document.createElement('a-icosahedron'); rock.setAttribute('position', `${end.x-4+dx} 0.1 ${end.z-1+dz}`); rock.setAttribute('radius', s); rock.setAttribute('color', '#6d6d6d'); worldRoot.appendChild(rock);} })();
 
       // 4) MARCADORES + PLACAS
       ;(function placeMarkers(){ STOPS.forEach((s,i)=>{ const v=curve.getPointAt(s.t); const last=(i===STOPS.length-1); const marker=document.createElement('a-ring'); marker.setAttribute('position', `${v.x} 0.02 ${v.z}`); marker.setAttribute('rotation','-90 0 0'); marker.setAttribute('radius-inner','0.12'); marker.setAttribute('radius-outer','0.2'); marker.setAttribute('color', last?'#22d3ee':'#34d399'); marker.setAttribute('material','opacity:0.95'); marker.setAttribute('class','clickable'); marker.setAttribute('animation__pulse','property: scale; dir: alternate; from: 1 1 1; to: 1.2 1.2 1; dur: 900; loop: true; easing: easeInOutSine'); marker.addEventListener('click', ()=>{ pauseWalk(); onVisitStop(s); showInfo(s.title, s.text); }); worldRoot.appendChild(marker); createSignAt(v.x+0.9, v.z+0.7, s.title, s.text, last, s.key); }); })();
