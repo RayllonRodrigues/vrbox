@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Mapa Vivo — Trilha até o Rio (realista, tileable, VR)</title>
+  <title>Mapa Vivo — Trilha até o Rio (Realista 2.0)</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <!-- Componente de ambiente (sombras, luz, horizonte) -->
   <script src="https://cdn.jsdelivr.net/npm/aframe-environment-component@1.3.3/dist/aframe-environment-component.min.js"></script>
   <style>
     :root{color-scheme:dark}
@@ -22,6 +21,7 @@
     .panel h3{margin:.2rem 0 .3rem;font-size:1rem}
     .panel p{margin:0;color:#c9d9f3;font-size:.95rem}
     .progress{margin-left:auto;background:#0b1220;color:#cfe3ff;padding:.45rem .6rem;border-radius:.6rem;font-weight:700}
+    .badge{background:#111827;color:#cfe3ff;padding:.35rem .6rem;border-radius:.6rem;font-weight:700}
   </style>
 </head>
 <body>
@@ -34,6 +34,7 @@
     <button class="btn secondary" id="slower">– Vel</button>
     <button class="btn secondary" id="faster">+ Vel</button>
     <button class="btn secondary" id="reverse">⇄ Direção</button>
+    <span class="badge" id="visited">0/5 descobertas</span>
     <span class="progress" id="progress">0%</span>
   </div>
   <div class="toast" id="toast"></div>
@@ -41,15 +42,15 @@
 
   <!-- Cena -->
   <a-scene id="scene" vr-mode-ui="enabled:true" renderer="antialias:true; colorManagement:true" device-orientation-permission-ui="enabled:false" auto-walk>
-    <!-- Ambiente de floresta leve (horizonte + iluminação). Escurecido para realçar trilha/placas -->
-    <a-entity environment="preset: forest; ground: flat; groundColor: #25331e; groundYScale: 6; skyType: gradient; skyColor: #03203a; horizonColor: #0b3d3f; lighting: distant; fog: 0.35; grid: none; dressing: none"></a-entity>
+    <!-- Ambiente de floresta (horizonte/iluminação) -->
+    <a-entity environment="preset: forest; ground: flat; groundColor: #25331e; groundYScale: 6; skyType: gradient; skyColor: #062a42; horizonColor: #0b3d3f; lighting: distant; fog: 0.35; grid: none; dressing: none"></a-entity>
 
-    <!-- Neblina adicional e luz solar quente -->
-    <a-entity fog="type: exponential; color: #133024; density: 0.018"></a-entity>
+    <!-- Neblina e luz solar -->
+    <a-entity fog="type: exponential; color: #123224; density: 0.02"></a-entity>
     <a-entity light="type: directional; color: #ffd68a; intensity: 0.9" position="-2 6 -3"></a-entity>
     <a-entity light="type: ambient; intensity: 0.45"></a-entity>
 
-    <!-- Solo com textura TILEABLE (three.js CDN, CORS OK) -->
+    <!-- Solo com textura TILEABLE (CORS ok - threejs) -->
     <a-plane id="ground" rotation="-90 0 0" width="320" height="320" position="0 0 0"
       material="src: url(https://threejs.org/examples/textures/terrain/grasslight-big.jpg); repeat: 80 80; metalness:0; roughness:1;">
     </a-plane>
@@ -57,8 +58,11 @@
     <!-- Mundo (trilha, árvores, marcadores, rio) -->
     <a-entity id="worldRoot"></a-entity>
 
-    <!-- Som ambiente de floresta (CORS liberado - Pixabay/CDN) -->
-    <a-sound id="ambience" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_0a3b9b0d1a.mp3?filename=forest-nature-ambience-143172.mp3" autoplay="true" loop="true" volume="0.25"></a-sound>
+    <!-- Som: global + som do rio localizado -->
+    <a-sound id="ambience" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_0a3b9b0d1a.mp3?filename=forest-nature-ambience-143172.mp3" autoplay="true" loop="true" volume="0.22"></a-sound>
+    <a-entity id="riverSfx" position="-12 0 -29">
+      <a-sound src="https://cdn.pixabay.com/download/audio/2021/09/07/audio_4f4d9f6a17.mp3?filename=river-nature-ambient-9095.mp3" autoplay="true" loop="true" distanceModel="exponential" rolloffFactor="2.0" refDistance="6" volume="0.6"></a-sound>
+    </a-entity>
 
     <!-- Rig/câmera -->
     <a-entity id="rig" position="0 1.6 0" gamepad-walk="speed: 1.6">
@@ -74,24 +78,24 @@
   </a-scene>
 
   <script>
-    // ===== Caminho sinuoso (Catmull-Rom) da vila até o rio =====
+    // ===== Caminho sinuoso (Catmull-Rom) =====
     const PATH = [
-      {x: 0,  z:   0},  // vila (início)
+      {x: 0,  z:   0},
       {x: 4,  z:  -2}, {x: 9,  z:  -6}, {x: 12, z: -10},
       {x: 10, z: -14}, {x: 6,  z: -17}, {x: 2,  z: -20},
-      {x:-3,  z: -22}, {x:-8,  z: -25}, {x:-12, z: -29} // rio
+      {x:-3,  z: -22}, {x:-8,  z: -25}, {x:-12, z: -29}
     ];
 
-    // Paradas educativas (t em 0..1)
+    // Paradas educativas
     const STOPS = [
-      { t: 0.12, title: 'Andiroba (Carapa guianensis)', text: 'Óleo usado em fitoterapia e repelente natural.' },
-      { t: 0.28, title: 'Açaí (Euterpe oleracea)', text: 'Palmeira de várzea; gera alimento e renda.' },
-      { t: 0.47, title: 'Buriti (Mauritia flexuosa)', text: 'Importante para fauna e microclima.' },
-      { t: 0.66, title: 'Vitória-régia (Victoria amazonica)', text: 'Folhas gigantes; indicador de ambientes alagados.' },
-      { t: 0.90, title: 'Peixes do Tocantins', text: 'Tucunaré, Piau, Pacu e Surubim — equilíbrio do rio.' }
+      { t: 0.12, key:'andiroba', title: 'Andiroba (Carapa guianensis)', text: 'Óleo usado em fitoterapia e repelente natural.' },
+      { t: 0.28, key:'acai', title: 'Açaí (Euterpe oleracea)', text: 'Palmeira de várzea; gera alimento e renda.' },
+      { t: 0.47, key:'buriti', title: 'Buriti (Mauritia flexuosa)', text: 'Importante para fauna e microclima.' },
+      { t: 0.66, key:'vitoria', title: 'Vitória-régia (Victoria amazonica)', text: 'Folhas gigantes; indicador de ambientes alagados.' },
+      { t: 0.90, key:'peixes', title: 'Peixes do Tocantins', text: 'Tucunaré, Piau, Pacu e Surubim — equilíbrio do rio.' }
     ];
 
-    // ===== Utilidades de UI =====
+    // ===== UI =====
     const hud = document.getElementById('hud');
     const toast = document.getElementById('toast');
     const infoPanel = document.getElementById('infoPanel');
@@ -103,6 +107,9 @@
     const camera = document.getElementById('camera');
     const cursorGaze = document.getElementById('cursorGaze');
     const progressChip = document.getElementById('progress');
+    const visitedChip = document.getElementById('visited');
+
+    const visited = new Set();
 
     function flash(msg, ms=1400){
       toast.textContent = msg; toast.style.display='block';
@@ -117,7 +124,7 @@
     infoPanel.addEventListener('click', hideInfo);
     document.body.addEventListener('pointerdown', ()=>{ maybeEnableTTS(); });
 
-    // ======= COMPONENTES UX =======
+    // ===== COMPONENTES UX =====
     AFRAME.registerComponent('face-camera', { tick(){ const cam = document.getElementById('camera'); if(!cam) return; const cpos = new THREE.Vector3(); cam.object3D.getWorldPosition(cpos); this.el.object3D.lookAt(cpos);} });
     AFRAME.registerComponent('distance-fade', {
       schema: { near:{default:1.5}, far:{default:10}, min:{default:0.25} },
@@ -135,23 +142,25 @@
       const startPos = curve.getPointAt(0); const startDir = curve.getTangentAt(0).clone();
       rig.object3D.position.copy(startPos); camera.object3D.lookAt(startPos.clone().add(startDir));
 
-      // 1) TRILHA: segmentos com textura tileable (asfalto/dirt leve para não distorcer)
+      // 1) TRILHA: segmentos tileable
       (function buildPath(){ const steps = 240; const pathWidth = 2.4; for(let i=0;i<steps;i++){ const t = i/(steps-1); const p = curve.getPointAt(t); const seg = document.createElement('a-plane'); seg.setAttribute('position', `${p.x} 0.01 ${p.z}`); seg.setAttribute('rotation', '-90 0 0'); seg.setAttribute('width', pathWidth); seg.setAttribute('height', 1.4); seg.setAttribute('material', 'src: url(https://threejs.org/examples/textures/terrain/grasslight-big.jpg); repeat: 4 1; metalness:0; roughness:1; opacity:0.98'); worldRoot.appendChild(seg);} })();
 
-      // 2) ÁRVORES: material sólido (cores) para visual limpo e leve no mobile
+      // 2) ÁRVORES: procedurais leves (mobile-friendly)
       ;(function buildForest(){ const safeR = 1.7; function tooCloseToPath(x,z){ for(let s=0; s<=1; s+=0.05){ const c = curve.getPointAt(s); const dx=x-c.x, dz=z-c.z; if((dx*dx+dz*dz) < (safeR*safeR)) return true; } return false; }
         for(let i=0;i<220;i++){ const x=(Math.random()*70-35), z=(Math.random()*-48); if(tooCloseToPath(x,z)) continue; const trunkH=1.2+Math.random()*1.2; const crownR=0.5+Math.random()*0.9; const trunk=document.createElement('a-cylinder'); trunk.setAttribute('position', `${x} ${trunkH/2} ${z}`); trunk.setAttribute('radius', 0.08); trunk.setAttribute('height', trunkH); trunk.setAttribute('color', '#6b4f2a'); worldRoot.appendChild(trunk); const crown=document.createElement('a-sphere'); crown.setAttribute('position', `${x} ${trunkH} ${z}`); crown.setAttribute('radius', crownR); crown.setAttribute('color', '#2a7b4c'); crown.setAttribute('material','roughness:1; metalness:0'); worldRoot.appendChild(crown);} })();
 
-      // 3) RIO: água tileable + leve animação
-      ;(function buildRiver(){ const end = PATH[PATH.length-1]; const water=document.createElement('a-plane'); water.setAttribute('position', `${end.x-4} 0.02 ${end.z-6}`); water.setAttribute('rotation', '-90 0 0'); water.setAttribute('width', 40); water.setAttribute('height', 30); water.setAttribute('material', 'src: url(https://threejs.org/examples/textures/water.jpg); repeat: 10 8; metalness:0.2; roughness:0.35; opacity:0.92'); water.setAttribute('animation__wave','property: material.opacity; dir: alternate; from: 0.86; to: 0.95; dur: 1600; loop: true; easing: easeInOutSine'); worldRoot.appendChild(water); for(let i=0;i<24;i++){ const s = 0.2+Math.random()*0.5; const dx=(Math.random()*14-7), dz=(Math.random()*4-2); const rock=document.createElement('a-icosahedron'); rock.setAttribute('position', `${end.x-4+dx} 0.1 ${end.z-1+dz}`); rock.setAttribute('radius', s); rock.setAttribute('color', '#6d6d6d'); worldRoot.appendChild(rock);} })();
+      // 3) RIO: água tileable + animação
+      ;(function buildRiver(){ const end = PATH[PATH.length-1]; const water=document.createElement('a-plane'); water.setAttribute('position', `${end.x-4} 0.02 ${end.z-6}`); water.setAttribute('rotation', '-90 0 0'); water.setAttribute('width', 40); water.setAttribute('height', 30); water.setAttribute('material', 'src: url(https://threejs.org/examples/textures/water.jpg); repeat: 10 8; metalness:0.15; roughness:0.35; opacity:0.92'); water.setAttribute('animation__wave','property: material.offset; to: 0 1; dur: 8000; easing: linear; loop: true'); worldRoot.appendChild(water); for(let i=0;i<24;i++){ const s = 0.2+Math.random()*0.5; const dx=(Math.random()*14-7), dz=(Math.random()*4-2); const rock=document.createElement('a-icosahedron'); rock.setAttribute('position', `${end.x-4+dx} 0.1 ${end.z-1+dz}`); rock.setAttribute('radius', s); rock.setAttribute('color', '#6d6d6d'); worldRoot.appendChild(rock);} })();
 
-      // 4) MARCADORES + PLACAS (educativas)
-      ;(function placeMarkers(){ STOPS.forEach((s,i)=>{ const v=curve.getPointAt(s.t); const last=(i===STOPS.length-1); const marker=document.createElement('a-ring'); marker.setAttribute('position', `${v.x} 0.02 ${v.z}`); marker.setAttribute('rotation','-90 0 0'); marker.setAttribute('radius-inner','0.12'); marker.setAttribute('radius-outer','0.2'); marker.setAttribute('color', last?'#22d3ee':'#34d399'); marker.setAttribute('material','opacity:0.95'); marker.setAttribute('class','clickable'); marker.setAttribute('animation__pulse','property: scale; dir: alternate; from: 1 1 1; to: 1.2 1.2 1; dur: 900; loop: true; easing: easeInOutSine'); marker.addEventListener('click', ()=>{ pauseWalk(); showInfo(s.title, s.text); }); worldRoot.appendChild(marker); createSignAt(v.x+0.9, v.z+0.7, s.title, s.text, last); }); })();
+      // 4) MARCADORES + PLACAS
+      ;(function placeMarkers(){ STOPS.forEach((s,i)=>{ const v=curve.getPointAt(s.t); const last=(i===STOPS.length-1); const marker=document.createElement('a-ring'); marker.setAttribute('position', `${v.x} 0.02 ${v.z}`); marker.setAttribute('rotation','-90 0 0'); marker.setAttribute('radius-inner','0.12'); marker.setAttribute('radius-outer','0.2'); marker.setAttribute('color', last?'#22d3ee':'#34d399'); marker.setAttribute('material','opacity:0.95'); marker.setAttribute('class','clickable'); marker.setAttribute('animation__pulse','property: scale; dir: alternate; from: 1 1 1; to: 1.2 1.2 1; dur: 900; loop: true; easing: easeInOutSine'); marker.addEventListener('click', ()=>{ pauseWalk(); onVisitStop(s); showInfo(s.title, s.text); }); worldRoot.appendChild(marker); createSignAt(v.x+0.9, v.z+0.7, s.title, s.text, last, s.key); }); })();
 
-      flash('Cenário realista carregado. Toque para ativar áudio e controles.');
+      flash('Cenário Realista 2.0 carregado. Toque para ativar áudio e controles.');
     }
 
-    function createSignAt(x, z, title, text, highlight=false){
+    function onVisitStop(s){ visited.add(s.key); visitedChip.textContent = `${visited.size}/${STOPS.length} descobertas`; }
+
+    function createSignAt(x, z, title, text, highlight=false, key=''){
       const worldRoot = document.getElementById('worldRoot');
       const sign = document.createElement('a-entity'); sign.setAttribute('position', `${x} 0 ${z}`); sign.setAttribute('face-camera',''); sign.setAttribute('distance-fade','near:1.5; far:10; min:0.25'); worldRoot.appendChild(sign);
       const post=document.createElement('a-cylinder'); post.setAttribute('position','0 0.75 0'); post.setAttribute('radius','0.05'); post.setAttribute('height','1.5'); post.setAttribute('color','#5a4528'); sign.appendChild(post);
@@ -161,12 +170,12 @@
       const icon=document.createElement('a-entity'); icon.setAttribute('geometry','primitive: box; depth: 0.02; height: 0.16; width: 0.16'); icon.setAttribute('position','-0.68 1.1 0.05'); icon.setAttribute('rotation','0 0 45'); icon.setAttribute('material',`color: ${highlight? '#06b6d4' : '#e6b980'}; emissive: ${highlight? '#0891b2':'#7a4'}; emissiveIntensity: 0.3`); sign.appendChild(icon);
       const t=document.createElement('a-entity'); t.setAttribute('text',`value:${title}; align:left; color:#fff; width: 3.6;`); t.setAttribute('position','-0.55 1.24 0.06'); sign.appendChild(t);
       const desc=document.createElement('a-entity'); desc.setAttribute('text',`value:${text}; align:left; color:#dbeafe; width: 3.3;`); desc.setAttribute('position','-0.55 0.98 0.06'); sign.appendChild(desc);
-      ;[plate, back, t, desc].forEach(el => el.addEventListener('click', ()=>{ pauseWalk(); showInfo(title, text); }));
+      ;[plate, back, t, desc].forEach(el => el.addEventListener('click', ()=>{ pauseWalk(); onVisitStop({key}); showInfo(title, text); }));
       return sign;
     }
 
-    // ===== Caminhada automática (velocidade/direção) =====
-    let walking = true; let tParam = 0; const WALK = { speed: 0.02, direction: 1 }; // 1 = vila→rio; -1 = volta
+    // ===== Caminhada (VR-safe) =====
+    let walking = true; let tParam = 0; const WALK = { speed: 0.02, direction: 1 };
     function clamp01(v){ return Math.max(0, Math.min(1, v)); }
     function updateProgress(){ progressChip.textContent = Math.round(tParam*100) + '%'; }
 
@@ -178,13 +187,12 @@
       if(tParam<=0 && WALK.direction<0){ tParam = 0; pauseWalk(); flash('Retornamos à vila.'); }
       const pos = curve.getPointAt(tParam); let dir = curve.getTangentAt(Math.max(0, Math.min(0.999, tParam))); if(WALK.direction < 0){ dir = dir.multiplyScalar(-1); }
       rig.object3D.position.copy(pos); camera.object3D.lookAt(pos.clone().add(dir));
-      for(const s of STOPS){ if(Math.abs(tParam - s.t) < 0.01){ showInfo(s.title, s.text); } }
+      for(const s of STOPS){ if(Math.abs(tParam - s.t) < 0.01){ onVisitStop(s); showInfo(s.title, s.text); } }
     }
 
     function pauseWalk(){ walking = false; playPauseBtn.textContent = '▶️ Reproduzir'; document.getElementById('status').textContent = 'Caminhada: pausada'; }
     function playWalk(){ walking = true;  playPauseBtn.textContent = '⏸️ Pausar';     document.getElementById('status').textContent = 'Caminhada: tocando…'; hideInfo(); }
 
-    // Tick no A‑Frame (funciona em VR e navegador)
     AFRAME.registerComponent('auto-walk', { tick: function (_time, timeDelta) { updateWalk((timeDelta||0)/1000); } });
 
     // ===== HUD botões =====
